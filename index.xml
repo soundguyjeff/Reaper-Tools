@@ -4,11 +4,15 @@
     <reapack name="Wwise Relay.lua" type="script" desc="Wwise Relay - update existing Wwise audio after rendering">
       <metadata>
         <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools">Setup and instructions</link>
-        <description>{\rtf1\ansi Wwise Relay for Windows x64.\par Requires REAPER 7, ReaWwise, ReaImGui 0.9.3+ and Wwise 2024.1.1.\par Updates explicitly linked existing SFX audio only. No WAV backups.\par Test build: verify your NVK render groups before relying on batch coverage.}</description>
+        <description>{\rtf1\ansi Wwise Relay for Windows x64.\par Requires REAPER 7, ReaWwise, ReaImGui 0.9.3+ and Wwise 2024.1.1.\par Automatically matches WAV filenames to unique existing Sound names. No manual audio links, new objects or WAV backups.\par Test build: verify your NVK render groups before relying on batch coverage.}</description>
       </metadata>
       <version name="0.1.1" author="Reaper Tools" time="2026-09-24T11:21:05-05:00">
         <source main="main" platform="win64" hash="1220a42abaf1f5a724565a1e30893ab4f758ae75392e51801155d0c6475e7d264ffe">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ac5ed9aba5c9ae60772432b16c8b9e59a6fea5ca/Wwise%20Relay.lua</source>
         <changelog>Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.</changelog>
+      </version>
+      <version name="0.2.0" author="Reaper Tools" time="2026-09-24T11:43:58-05:00">
+        <source main="main" platform="win64" hash="12209a4d22dfc54064ac11977121ce0e0814cb68c3a7bc0b6833a52038b5dc1b9b3d">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/f91d42cb4d530b8246ef09343405d2e6a7bd90fc/Wwise%20Relay.lua</source>
+        <changelog>Automatically match rendered WAV filenames to unique existing Wwise Sound names. Remove manual audio links. Skip missing, ambiguous, shared or competing targets. Keep project and platform preferences.</changelog>
       </version>
     </reapack>
   </category>
