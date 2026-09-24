@@ -26,6 +26,10 @@
         <source main="main" platform="win64" hash="1220cbdd7206ec0e9ef3b707ada4728b6dd9a92744f8c0edbbef51f5b8e3301c1bfd">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/efb6824582f47ed01ced28bb824b96332fa578c7/Wwise%20Relay.lua</source>
         <changelog>Suppress Windows PowerShell first-use progress output in the hidden launcher. Includes persistent console-free file inspection and visible WAV errors.</changelog>
       </version>
+      <version name="0.2.4" author="Reaper Tools" time="2026-09-24T12:14:51-05:00">
+        <source main="main" platform="win64" hash="1220fc2519c72b6226dec96fd1619e401b865bf3ccd13d82eb15bf85208a0a4e0f31">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/66b7201bdec682e29087b6ab99719feed6d573d8/Wwise%20Relay.lua</source>
+        <changelog>Allow Windows Cloud Files markers in render/original paths while still rejecting actual symbolic links, junctions and unknown reparse tags. Report the exact unsupported path component.</changelog>
+      </version>
     </reapack>
   </category>
 </index>
