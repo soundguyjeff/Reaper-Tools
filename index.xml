@@ -22,6 +22,10 @@
         <source main="main" platform="win64" hash="1220bd3dbabfc4216ca69601f3fdcba7cd70ec8662b0824fa6f66020a863b4779da4">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/3ce91bb61a8f07af30420e397a8d59c00a4b9e50/Wwise%20Relay.lua</source>
         <changelog>Fix the Windows inspector startup hang by launching without inherited handles. Retain quiet persistent inspection and visible WAV errors.</changelog>
       </version>
+      <version name="0.2.3" author="Reaper Tools" time="2026-09-24T12:02:03-05:00">
+        <source main="main" platform="win64" hash="1220cbdd7206ec0e9ef3b707ada4728b6dd9a92744f8c0edbbef51f5b8e3301c1bfd">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/efb6824582f47ed01ced28bb824b96332fa578c7/Wwise%20Relay.lua</source>
+        <changelog>Suppress Windows PowerShell first-use progress output in the hidden launcher. Includes persistent console-free file inspection and visible WAV errors.</changelog>
+      </version>
     </reapack>
   </category>
 </index>
