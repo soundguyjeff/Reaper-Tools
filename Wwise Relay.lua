@@ -637,7 +637,7 @@ function SafePath([string]$p) {
   $part=$item
   while ($null -ne $part) {
     if (($part.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-      Check-ReparseTag (Get-ReparseTag $part.FullName) $part.FullName ([bool]$part.PSIsContainer)
+      Check-ReparseTag (Get-ReparseTag $part.FullName) $part.FullName ($part -is [IO.DirectoryInfo])
     }
     $part=$part.Parent
     if ($null -eq $part -and $item -is [IO.FileInfo]) { $part=$item.Directory;$item=$part }

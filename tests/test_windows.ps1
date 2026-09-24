@@ -122,7 +122,7 @@ try {
       Check ((Get-ReparseTag $junction) -eq [uint32]2684354563) 'Native Windows tag lookup identifies a real junction'
       $viaLink=Join-Path $junction 'audio.wav'
       $a=Call @{action='inspect';paths=@($viaLink)}
-      Check ($a.items[0].ok -and $a.items[0].resolvedPath -eq $targetWav) 'Junction resolves to the real local WAV'
+      Check ($a.items[0].ok -and $a.items[0].resolvedPath -eq $targetWav) ('Junction resolves to the real local WAV: '+($a | ConvertTo-Json -Compress -Depth 5))
       $out=Call @{action='replace';source=$targetWav;destination=$viaLink;stamp=$a.items[0].stamp;destinationSha=$originalHash}
       Check (!$out.ok -and (Sha $targetWav) -eq $originalHash) 'Two aliases of the same WAV are rejected'
       Wave $src 18;$a=Call @{action='inspect';paths=@($src)}
