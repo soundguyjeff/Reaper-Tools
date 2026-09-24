@@ -1,6 +1,6 @@
 # Install through ReaPack
 
-The repository includes `index.xml` with **Wwise Relay 0.1.1**, including the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
+The repository includes `index.xml` with **Wwise Relay 0.2.0**, with automatic filename-to-sound matching and the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
 
 ## Repository URL
 
@@ -21,7 +21,7 @@ Install **ReaWwise** and **ReaImGui 0.9.3+** separately through their normal Rea
 
 For later updates, close Relay first, choose **ReaPack → Synchronize packages**, apply the update, then run Relay again.
 
-If you already loaded a manual copy, stop it before running the ReaPack copy. Point your toolbar/shortcut at the new ReaPack action so you do not keep launching the old file. ReaPack does not remove your manually installed copy. Project-link settings stay in REAPER's settings.
+If you already loaded a manual copy, stop it before running the ReaPack copy. Point your toolbar/shortcut at the new ReaPack action so you do not keep launching the old file. ReaPack does not remove your manually installed copy. Project/platform settings stay in REAPER's settings. Manual audio links are no longer needed.
 
 ReaPack needs network access for online installation and updates. Relay itself runs locally afterward. A closed PC with no permitted network path still needs your approved offline transfer process.
 

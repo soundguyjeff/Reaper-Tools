@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.1.1
+-- @version 0.2.0
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaWwise and ReaImGui 0.9.3+.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- No Wwise objects are created, no audio is imported, no WAV backups are made.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.1.1', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.0', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -102,23 +102,50 @@ function M.render_files(stats)
   end
   return files
 end
-function M.index_links(links)
-  local out={}
-  for _,link in ipairs(links or {}) do
-    local k=M.key(link.render)
-    assert(not out[k],'Duplicate render path in profile')
-    assert(M.guid(link.source_id) and M.guid(link.sound_id) and M.guid(link.container_id),'Invalid linked ID')
-    assert(M.absolute(link.render) and M.absolute(link.original),'Absolute file paths required')
-    assert(M.key(link.render)~=M.key(link.original),'Render directly into Originals is not supported')
-    out[k]=link
+-- Match a complete filename stem, never a prefix, substring or version-stripped name.
+function M.sound_name(path)
+  local base=M.basename(path)
+  if not M.absolute(path) or not base or not base:lower():match('%.wav$') or path:find(';',1,true) then return nil end
+  local name=base:sub(1,-5)
+  return name~='' and name or nil
+end
+function M.match_sound(path,sounds)
+  local name=M.sound_name(path)
+  if not name then return nil,'Expected a local rendered WAV filename.' end
+  local found
+  for _,sound in ipairs(sounds) do
+    if sound.type=='Sound' and type(sound.name)=='string' and sound.name:lower()==name:lower() then
+      if found then return nil,'More than one Wwise Sound is named "'..name..'"; no audio was changed for this file.' end
+      found=sound
+    end
   end
-  return out
+  if not found then return nil,'No existing Wwise Sound named "'..name..'".' end
+  return found
+end
+-- Reject all competing outputs, so order cannot decide which WAV wins.
+function M.reject_collisions(items)
+  local owners={}
+  for _,item in ipairs(items) do
+    if item.link then
+      for _,key in ipairs({'sound:'..item.link.sound_id,'original:'..M.key(item.link.original)}) do
+        owners[key]=owners[key] or {};owners[key][#owners[key]+1]=item
+      end
+    end
+  end
+  for _,group in pairs(owners) do
+    if #group>1 then for _,item in ipairs(group) do
+      item.skip_reason='Multiple rendered WAVs target the same Wwise sound/original; all competing files were skipped.'
+    end end
+  end
+  for _,item in ipairs(items) do if item.skip_reason then item.link=nil end end
 end
 function M.validate_link(link,live,all_sources,project_id,project_path)
+  assert(M.guid(link.source_id) and M.guid(link.sound_id) and M.guid(link.container_id),'Invalid matched object ID')
+  assert(M.absolute(link.render) and M.absolute(link.original),'Absolute file paths required')
   assert(project_id==link.project_id and M.key(project_path)==M.key(link.project_path),'Wrong Wwise project')
-  assert(live and live.id==link.source_id and live.type=='AudioFileSource','Linked source is missing or changed')
-  assert(live.parent_id==link.sound_id,'Linked source moved to another sound')
-  assert(M.key(live.original)==M.key(link.original),'Wwise original path changed; relink this source')
+  assert(live and live.id==link.source_id and live.type=='AudioFileSource','Matched source is missing or changed')
+  assert(live.parent_id==link.sound_id,'Matched source moved to another sound')
+  assert(M.key(live.original)==M.key(link.original),'Wwise original path changed during the update; render again')
   assert(live.language=='SFX','Only SFX sources are supported in this release')
   assert(M.key(link.original)~=M.key(link.render),'Render and original paths must differ')
   local count=0
@@ -139,12 +166,14 @@ local Detector={};Detector.__index=Detector
 function M.detector() return setmetatable({seen={},pending={},ready_at=0},Detector) end
 function Detector:baseline(items)
   self.pending={}
-  for _,v in ipairs(items) do if v.ok then self.seen[M.key(v.path)]=v.stamp end end
+  for _,v in ipairs(items) do self.seen[M.key(v.path)]=v.ok and v.stamp or false end
 end
 function Detector:observe(items,now)
   for _,v in ipairs(items) do
     local k=M.key(v.path)
-    if v.ok and v.stamp~=self.seen[k] then
+    if v.ok and self.seen[k]==false then
+      self.seen[k]=v.stamp -- Unreadable old report entry: first readable signature is a baseline.
+    elseif v.ok and v.stamp~=self.seen[k] then
       self.seen[k]=v.stamp;self.pending[k]=v;self.ready_at=now+2
     end
   end
@@ -166,7 +195,7 @@ local C=require('relay.core')
 local M={};M.__index=M
 local allow={
  ['ak.wwise.core.object.get']=true,['ak.wwise.core.getInfo']=true,
- ['ak.wwise.core.getProjectInfo']=true,['ak.wwise.ui.getSelectedObjects']=true,
+ ['ak.wwise.core.getProjectInfo']=true,
  ['ak.wwise.core.audio.convert']=true,['ak.wwise.ui.commands.execute']=true,
  ['ak.wwise.ui.bringToForeground']=true,
 }
@@ -175,7 +204,7 @@ function M:call(uri,args,options,read)
   assert(allow[uri],'Wwise operation is not permitted')
   if uri=='ak.wwise.ui.commands.execute' then assert(args.command=='FindInProjectExplorerSyncGroup1','Only navigation is permitted') end
   if uri=='ak.wwise.core.audio.convert' then
-    assert(#args.objects==1 and C.guid(args.objects[1]),'Conversion must target one approved audio source')
+    assert(#args.objects==1 and C.guid(args.objects[1]),'Conversion must target one matched audio source')
     assert(#args.platforms==1 and #args.languages==1 and args.languages[1]=='SFX','Conversion scope is invalid')
   end
   local r,owned=self.r,{}
@@ -253,36 +282,49 @@ function M:sources()
   for _,s in ipairs(a) do s.language=C.key(s.original):sub(1,#prefix)==prefix and 'SFX' or 'Other' end
   return a
 end
-function M:selected_source()
-  local a=self:call('ak.wwise.ui.getSelectedObjects',{}, {['return']={'id','name','type'}},function(Q,p)return Q.list(p,'objects',function(x)return read_object(Q,x)end)end)
-  assert(#a==1,'Select exactly one existing Sound SFX or audio source in Wwise')
-  local selected=a[1];local sources=self:sources();local candidates={}
-  for _,s in ipairs(sources) do if selected.id==s.id or (selected.type=='Sound' and selected.id==s.parent_id) then candidates[#candidates+1]=s end end
-  assert(#candidates==1,'Select the individual audio source. Containers and sounds with multiple sources cannot be linked automatically.')
-  local source=candidates[1];local sound=self:object(source.parent_id)
-  assert(sound.type=='Sound','Only existing Sound SFX sources are supported')
-  -- Do not convert a sibling/inactive source by accident.
-  local active=self:call('ak.wwise.core.object.get',{from={id={sound.id}}},{['return']={'activeSource'}},function(Q,p)
-    return Q.list(p,'return',function(x)return Q.text(Q.get(x,'activeSource'),'id')end)[1]
-  end)
-  assert(active==source.id,'Select the active audio source for this sound')
-  local container=self:object(sound.parent_id)
-  return source,sound,container,sources
-end
-function M:verify(link,profile)
-  local p=self:project();assert(p.id==profile.project_id and C.key(p.file)==C.key(profile.project_path),'Wrong Wwise project; updates paused')
+function M:check_project(profile)
+  local p=self:project()
+  assert(p.id==profile.project_id and C.key(p.file)==C.key(profile.project_path),'Wrong Wwise project; updates paused')
   local platforms=self:objects({ofType={'Platform'}},{['return']={'id','name'}})
   local valid=false;for _,v in ipairs(platforms) do if v.id==profile.platform then valid=true end end
   assert(valid,'Pinned conversion platform is missing')
-  local all=self:sources();local live
-  for _,s in ipairs(all) do if s.id==link.source_id then live=s end end
-  C.validate_link(link,live,all,p.id,p.file)
-  local sound=self:object(link.sound_id)
-  assert(sound.parent_id==link.container_id,'Sound moved to another container; relink it')
-  local a=self:call('ak.wwise.core.object.get',{from={id={sound.id}}},{['return']={'activeSource'}},function(Q,v)
-    return Q.list(v,'return',function(x)return Q.text(Q.get(x,'activeSource'),'id')end)[1]
+  return p
+end
+function M:catalog(profile)
+  self:check_project(profile)
+  return {sounds=self:objects({ofType={'Sound'}},{['return']={'id','name','type','path','parent'}}),sources=self:sources()}
+end
+function M:active_source(sound_id,platform)
+  return self:call('ak.wwise.core.object.get',{from={id={sound_id}}},{['return']={'activeSource'},platform=platform},function(Q,p)
+    return Q.list(p,'return',function(x)return Q.text(Q.get(x,'activeSource'),'id')end)[1]
   end)
-  assert(a==link.source_id,'Active Wwise source changed; update skipped')
+end
+function M:match(path,profile,catalog)
+  local sound,reason=C.match_sound(path,catalog.sounds)
+  if not sound then return nil,reason end
+  local active=self:active_source(sound.id,profile.platform)
+  local source
+  for _,candidate in ipairs(catalog.sources) do if candidate.id==active then source=candidate end end
+  if not source then return nil,'The matched sound has no active file-based audio source on the selected platform.' end
+  local link={render=path,source_id=source.id,sound_id=sound.id,container_id=sound.parent_id,
+    sound_name=sound.name,sound_path=sound.path,source_path=source.path,original=source.original,
+    project_id=profile.project_id,project_path=profile.project_path}
+  local ok,err=pcall(C.validate_link,link,source,catalog.sources,profile.project_id,profile.project_path)
+  if not ok then return nil,tostring(err) end
+  local container=self:object(sound.parent_id)
+  link.container_path=container.path
+  return link
+end
+function M:verify(link,profile)
+  local catalog=self:catalog(profile)
+  local sound,reason=C.match_sound(link.render,catalog.sounds)
+  assert(sound,reason)
+  assert(sound.id==link.sound_id,'The matching Wwise sound changed during the update')
+  assert(sound.parent_id==link.container_id,'Sound moved to another container during the update; render again')
+  local live
+  for _,s in ipairs(catalog.sources) do if s.id==link.source_id then live=s end end
+  C.validate_link(link,live,catalog.sources,profile.project_id,profile.project_path)
+  assert(self:active_source(sound.id,profile.platform)==link.source_id,'Active Wwise source changed; update skipped')
   return true
 end
 function M:convert(link,platform)
@@ -473,7 +515,7 @@ try {
       $original=[IO.File]::Open($dst,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
       $old=WaveInfo $original
       if ($old.channels -ne $wi.channels) { throw 'Channel count changed; update skipped.' }
-      if ((HashStream $original) -ne $req.destinationSha) { throw 'Wwise original was edited since linking or the last update; relink to accept it.' }
+      if ((HashStream $original) -ne $req.destinationSha) { throw 'Wwise original changed while preparing this update; render again after the other edit finishes.' }
       $original.Dispose();$original=$null
       $temp=Join-Path ([IO.Path]::GetDirectoryName($dst)) ('.wwise-relay-'+[guid]::NewGuid().ToString('N')+'.tmp')
       $out=[IO.File]::Open($temp,[IO.FileMode]::CreateNew,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
@@ -521,21 +563,21 @@ if not project_guid then
   return
 end
 local key='profile:'..project_guid
-local profile={version=1,links=C.array(),port=8080,platform='',notify=true}
+local profile={version=2,port=8080,platform='',notify=true}
 local saved=r.GetExtState(C.SECTION,key)
 local startup_error
 if saved~='' then
   local ok,p=pcall(C.decode,saved)
-  if ok and type(p)=='table' and p.version==1 and type(p.links)=='table' and p.port and p.platform then
-    local valid,err=pcall(C.index_links,p.links)
-    if valid then profile=p else startup_error='Saved links need attention: '..tostring(err) end
+  if ok and type(p)=='table' and (p.version==1 or p.version==2) and type(p.port)=='number' and type(p.platform)=='string' then
+    -- Preserve project/platform preferences, but never reuse old manual audio links.
+    p.links=nil;p.version=2;profile=p
   else startup_error='Saved profile could not be loaded. Set up the project again.' end
 end
 local w=W.new(r,profile.port)
 local fs=F.new(r,worker)
-local s={enabled=false,status='Ready to set up',detail='Connect to Wwise and link your existing audio.',error=startup_error,
+local s={enabled=false,status='Ready to set up',detail='Connect to Wwise and choose your project and platform.',error=startup_error,
   results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
-  render_path='',tab='Setup',toast='',toast_until=0,selected_container=1,link_candidate=nil,baseline={},last_files={}}
+  tab='Setup',toast='',toast_until=0,selected_container=1,last_files={}}
 local heartbeat_key='instance:'..project_guid
 local now=r.time_precise()
 local prior=tonumber(r.GetExtState(C.SECTION,heartbeat_key)) or 0
@@ -544,7 +586,7 @@ r.SetExtState(C.SECTION,heartbeat_key,tostring(now),false)
 local function save() r.SetExtState(C.SECTION,key,C.json(profile),true) end
 local function toast(text) s.toast=text;s.toast_until=r.time_precise()+6 end
 local function pause(message)
-  s.enabled=false;s.detector:cancel();s.pending={};s.busy=false;s.error=tostring(message);s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
+  s.enabled=false;s.detector:cancel();s.pending={};s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
 end
 local function guard(fn)
   local ok,err=pcall(fn)
@@ -566,65 +608,35 @@ local function connect()
   w.port=profile.port
   local p,info=w:connect()
   if profile.project_id then assert(matched_project(p),'Open the pinned project in Wwise: '..profile.project_path) end
-  s.connected_project=p;s.error=nil;s.status='Connected';s.detail='Enable updates when your audio links are ready.'
+  s.connected_project=p;s.error=nil;s.status='Connected';s.detail='Ready to match rendered filenames to existing Wwise sounds.'
   s.info=info
 end
 local function pin()
   assert(s.connected_project,'Connect to Wwise first')
   current_project()
-  assert(#profile.links==0 or matched_project(s.connected_project),'Remove this profile’s links before choosing another Wwise project')
+  assert(not profile.project_id or matched_project(s.connected_project),'The pinned Wwise project must remain open')
   profile.project_id=s.connected_project.id;profile.project_path=s.connected_project.file;profile.project_name=s.connected_project.name
   if profile.platform=='' then
     for _,p in ipairs(w.platforms) do if p.name=='Windows' then profile.platform=p.id end end
     if profile.platform=='' then profile.platform=w.platforms[1].id end
   end
-  save();toast('Project pinned. Link an existing audio source next.')
+  save();toast('Project pinned. Enable updates and render as usual.')
 end
 local function platform_name()
   for _,p in ipairs(w.platforms or {}) do if p.id==profile.platform then return p.name end end
   return profile.platform_name or 'Choose platform'
 end
-local function prepare_link()
-  s.enabled=false;s.detector:cancel();s.pending={};current_project()
-  assert(profile.project_id,'Connect and pin the Wwise project in Setup first')
-  assert(matched_project(w:project()),'The pinned Wwise project is not open')
-  assert(C.absolute(s.render_path) and s.render_path:lower():match('%.wav$'),'Choose an existing rendered WAV')
-  assert(not s.render_path:find(';',1,true),'Semicolons in filenames are not supported by REAPER render reports')
-  local source,sound,container,all=w:selected_source()
-  local link={render=s.render_path,source_id=source.id,sound_id=sound.id,container_id=container.id,
-    container_path=container.path,source_path=source.path,original=source.original,project_id=profile.project_id,project_path=profile.project_path}
-  C.validate_link(link,source,all,profile.project_id,profile.project_path)
-  for _,l in ipairs(profile.links) do
-    assert(C.key(l.render)==C.key(link.render) or l.source_id~=link.source_id,'That Wwise source already has another render file linked')
-  end
-  local checks=fs:inspect({link.render,link.original},true)
-  assert(#checks==2 and checks[1].ok and checks[2].ok,((checks[1] or {}).error or (checks[2] or {}).error or 'Could not read both WAVs'))
-  assert(checks[1].channels==checks[2].channels,'Rendered WAV and Wwise original must have the same channel count')
-  link.destination_sha=checks[2].sha;link.render_stamp=checks[1].stamp
-  s.link_candidate=link;s.error=nil
-end
-local function accept_link()
-  local link=s.link_candidate;assert(link,'No link to save')
-  local found=false
-  for i,l in ipairs(profile.links) do if C.key(l.render)==C.key(link.render) then profile.links[i]=link;found=true end end
-  if not found then profile.links[#profile.links+1]=link end
-  C.index_links(profile.links);save();s.link_candidate=nil;toast('Existing source linked. No audio was changed.')
-end
 local function enable()
   current_project();assert(win,'Live updates require Windows');assert(w.connected,'Connect to Wwise first')
-  assert(profile.project_id and #profile.links>0,'Pin your project and add at least one existing audio link')
+  assert(profile.project_id,'Connect and choose Use this project in Setup first')
   assert(matched_project(w:project()),'Wrong Wwise project')
   local valid=false;for _,p in ipairs(w.platforms) do if p.id==profile.platform then valid=true end end
   assert(valid,'Select a valid conversion platform')
-  local paths={};for _,l in ipairs(profile.links) do paths[#paths+1]=l.render end
-  -- Baseline every approved render path, not a recursive watch of a directory.
-  s.detector=C.detector();local checks=fs:inspect(paths)
-  for _,v in ipairs(checks) do assert(v.ok,v.path..': '..(v.error or 'Cannot inspect WAV')) end
-  s.detector:baseline(checks)
+  s.detector=C.detector()
   s.last_stats=stats();s.last_files=C.render_files(s.last_stats)
-  -- Include old unlinked report entries so enabling never replays history.
+  -- Baseline only paths in the old completed report. No manual links or folder watch.
   if #s.last_files>0 then s.detector:baseline(fs:inspect(s.last_files)) end
-  s.pending={};s.job=nil;s.enabled=true;s.error=nil;s.status='Waiting for render';s.detail='Render through NVK as usual.';s.next_probe=r.time_precise()+1.5
+  s.pending={};s.job=nil;s.enabled=true;s.error=nil;s.status='Waiting for render';s.detail='Render through NVK as usual.';s.next_probe=r.time_precise()+1.5;save()
 end
 local function summary()
   local good,skipped,failed=0,0,0
@@ -636,31 +648,41 @@ local function summary()
   if failed>0 then s.enabled=false;s.detail=s.detail..' — updates paused' end
   if good>0 and failed+skipped==0 and profile.notify then toast('Wwise confirmed: '..good..' WAVs replaced and converted') end
 end
+local function begin_batch(items)
+  current_project()
+  local catalog=w:catalog(profile)
+  for _,item in ipairs(items) do item.link,item.skip_reason=w:match(item.path,profile,catalog) end
+  C.reject_collisions(items)
+  s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.pending=items;s.busy=true;s.error=nil;s.toast=''
+end
 local function process_one()
   local item=table.remove(s.pending,1);if not item then return end
   current_project()
-  local link=C.index_links(profile.links)[C.key(item.path)]
-  local row={path=item.path,state='Skipped',message='No approved link; no Wwise audio changed.'};s.results[#s.results+1]=row
+  local link=item.link
+  local row={path=item.path,state='Skipped',message=item.skip_reason or 'No unambiguous existing sound matched.'};s.results[#s.results+1]=row
   if link then
     row.link=link;row.state='Failed';s.status='Updating '..C.basename(item.path);s.detail='Verifying the existing source...'
     local ok,err=pcall(function()
       w:verify(link,profile)
+      local checks=fs:inspect({link.original},true)
+      local original=checks[1]
+      assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
+      link.destination_sha=original.sha
       local previous_sha=link.destination_sha
       local replaced=fs:replace(link,item)
-      row.replaced=true;row.state='Conversion failed';link.destination_sha=replaced.sha;link.pending_conversion=true;save()
+      row.replaced=true;row.state='Conversion failed';link.destination_sha=replaced.sha
       -- Verify identity again after replacement; never convert a new/moved object.
       w:verify(link,profile)
       local converted=w:convert(link,profile.platform)
       fs:artifact(converted,replaced.stamp,previous_sha==replaced.sha)
       row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media is current.'
-      link.pending_conversion=nil;save()
       local have=false;for _,v in ipairs(s.containers) do if v.id==link.container_id then have=true end end
       if not have then s.containers[#s.containers+1]={id=link.container_id,path=link.container_path} end
     end)
     if not ok then
       row.message=tostring(err);s.error=row.message;s.enabled=false
       for _,remaining in ipairs(s.pending) do
-        s.results[#s.results+1]={path=remaining.path,state='Not processed',message='Paused after the preceding failure.',link=C.index_links(profile.links)[C.key(remaining.path)]}
+        s.results[#s.results+1]={path=remaining.path,state='Not processed',message='Paused after the preceding failure.',link=remaining.link}
       end
       s.pending={}
     end
@@ -669,11 +691,11 @@ local function process_one()
 end
 local function retry_failed()
   current_project();assert(w.connected,'Connect first')
-  local paths={};for _,v in ipairs(s.results) do if v.link and v.state~='Converted' then paths[#paths+1]=v.link.render end end
-  assert(#paths>0,'No linked failures to retry')
+  local paths={};for _,v in ipairs(s.results) do if v.state~='Converted' then paths[#paths+1]=v.path end end
+  assert(#paths>0,'No skipped or failed files to retry')
   local items=fs:inspect(paths)
   for _,v in ipairs(items) do assert(v.ok,v.error or 'Cannot read rendered file') end
-  s.pending=items;s.results={};s.containers={};s.busy=true;s.error=nil;s.tab='Latest render'
+  begin_batch(items)
 end
 local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
@@ -698,7 +720,7 @@ local function tick()
     s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
   end
   local ready=s.detector:take(time)
-  if ready then s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.pending=ready;s.busy=true;s.error=nil end
+  if ready then begin_batch(ready) end
 end
 
 local green,amber,red,muted=0x95D5AEFF,0xEDC28AFF,0xEBA0A0FF,0xB0B5BEFF
@@ -729,37 +751,15 @@ local function render_tab()
     I.Separator(ctx)
     for i,v in ipairs(s.results) do
       I.PushID(ctx,i);I.TextColored(ctx,v.state=='Converted' and green or amber,C.basename(v.path)..' — '..v.state)
+      if v.link then text('Matched: '..(v.link.sound_path or v.link.source_path or '')) end
       text(v.message);I.PopID(ctx)
     end
-    button('Retry failed linked files',retry_failed,s.busy or not w.connected)
+    button('Retry skipped / failed files',retry_failed,s.busy or not w.connected)
   end
   if s.error then
     I.Separator(ctx);I.TextColored(ctx,amber,'Attention');text(s.error)
     button('Dismiss message',function()s.error=nil end)
   end
-end
-local function links_tab()
-  I.BeginDisabled(ctx,s.busy)
-  text('Select one existing sound/source in Wwise, then choose its rendered WAV here.')
-  button('Choose rendered WAV...',function()
-    local ok,path=r.GetUserFileNameForRead(s.render_path,'Choose existing REAPER output WAV','.wav')
-    if ok then s.render_path=path;s.link_candidate=nil end
-  end)
-  if s.render_path~='' then text(C.basename(s.render_path)) end
-  button('Read selected Wwise source',prepare_link,not w.connected or s.render_path=='')
-  if s.link_candidate then
-    local l=s.link_candidate;text(l.render..'\n→ '..l.source_path)
-    button('Save approved link',accept_link);I.SameLine(ctx);button('Cancel',function()s.link_candidate=nil end)
-  end
-  I.Separator(ctx)
-  for i,l in ipairs(profile.links) do
-    I.PushID(ctx,i);text(C.basename(l.render));I.TextColored(ctx,muted,l.source_path)
-    button('Unlink',function()s.enabled=false;table.remove(profile.links,i);save()end)
-    I.SameLine(ctx);button('Show container',function()w:show(l.container_id,profile)end,not w.connected)
-    if l.pending_conversion then I.TextColored(ctx,amber,'Previous replacement still needs conversion') end
-    I.Separator(ctx);I.PopID(ctx)
-  end
-  I.EndDisabled(ctx)
 end
 local function setup_tab()
   I.BeginDisabled(ctx,s.busy or s.enabled)
@@ -777,6 +777,7 @@ local function setup_tab()
   end
   local ch,val=I.Checkbox(ctx,'Show success confirmation',profile.notify)
   if ch then profile.notify=val;save() end
+  text('Automatic matching: WAV filename (without .wav) = existing Wwise Sound name. Duplicate or missing matches are skipped.')
   text('Conversion uses existing Wwise settings. No object creation, imports, SoundBanks, or WAV backups.')
   I.EndDisabled(ctx)
   if s.enabled then text('Pause updates to change setup.') end
@@ -796,11 +797,11 @@ local function ui()
     I.TextColored(ctx,muted,(w.connected and ('Connected · '..platform_name()) or 'Not connected')..'  |  v'..C.VERSION)
     if not win then I.TextColored(ctx,amber,'UI preview — live updates require Windows') end
     if I.BeginTabBar(ctx,'views') then
-      for _,t in ipairs({'Latest render','Audio links','Setup'}) do
+      for _,t in ipairs({'Latest render','Setup'}) do
         local flags=s.tab==t and I.TabItemFlags_SetSelected or 0
         if I.BeginTabItem(ctx,t,nil,flags) then
           if s.tab==t then s.tab=nil end
-          if t=='Latest render' then render_tab() elseif t=='Audio links' then links_tab() else setup_tab() end
+          if t=='Latest render' then render_tab() else setup_tab() end
           I.EndTabItem(ctx)
         end
       end

@@ -25,10 +25,13 @@ def main():
         package=ET.SubElement(category,'reapack',name=FILE,type='script',desc='Wwise Relay - update existing Wwise audio after rendering')
         meta=ET.SubElement(package,'metadata')
         ET.SubElement(meta,'link',rel='website',href=f'https://github.com/{REPO}').text='Setup and instructions'
-        ET.SubElement(meta,'description').text=(r'{\rtf1\ansi Wwise Relay for Windows x64.\par '
-            r'Requires REAPER 7, ReaWwise, ReaImGui 0.9.3+ and Wwise 2024.1.1.\par '
-            r'Updates explicitly linked existing SFX audio only. No WAV backups.\par '
-            r'Test build: verify your NVK render groups before relying on batch coverage.}')
+    meta=package.find('metadata')
+    description=meta.find('description')
+    if description is None: description=ET.SubElement(meta,'description')
+    description.text=(r'{\rtf1\ansi Wwise Relay for Windows x64.\par '
+        r'Requires REAPER 7, ReaWwise, ReaImGui 0.9.3+ and Wwise 2024.1.1.\par '
+        r'Automatically matches WAV filenames to unique existing Sound names. No manual audio links, new objects or WAV backups.\par '
+        r'Test build: verify your NVK render groups before relying on batch coverage.}')
     release=package.find(f"version[@name='{version}']")
     if release is not None:
         if release.find('source').get('hash')!=digest:
@@ -37,7 +40,10 @@ def main():
         stamp=git('show','-s','--format=%cI',commit).decode().strip()
         release=ET.SubElement(package,'version',name=version,author='Reaper Tools',time=stamp)
         ET.SubElement(release,'source',main='main',platform='win64',hash=digest).text=url
-        ET.SubElement(release,'changelog').text='Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.' if version=='0.1.1' else 'Updated Wwise Relay. See repository history for changes.'
+        changes={
+            '0.1.1':'Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.',
+            '0.2.0':'Automatically match rendered WAV filenames to unique existing Wwise Sound names. Remove manual audio links. Skip missing, ambiguous, shared or competing targets. Keep project and platform preferences.'}
+        ET.SubElement(release,'changelog').text=changes.get(version,'Updated Wwise Relay. See repository history for changes.')
     ET.indent(root,space='  ')
     path.write_bytes(ET.tostring(root,encoding='utf-8',xml_declaration=True)+b'\n')
     print(f'ReaPack feed ready: Wwise Relay {version}, pinned to {commit[:8]}')

@@ -10,16 +10,24 @@ local function scenario(mode)
   local startup_message
   local id='{11111111-1111-1111-1111-111111111111}'
   local link={render='C:\\render.wav',original='C:\\original.wav',source_id=id,sound_id=id,container_id=id,
-    project_id=id,project_path='C:\\game.wproj',destination_sha='old',container_path='\\Actor-Mixer Hierarchy\\Container'}
-  local profile={version=1,links=C.array({link}),port=8080,platform=id,project_id=id,project_path='C:\\game.wproj',notify=true}
+    project_id=id,project_path='C:\\game.wproj',destination_sha='old',sound_path='\\Actor-Mixer Hierarchy\\Container\\render',container_path='\\Actor-Mixer Hierarchy\\Container'}
+  local profile={version=2,port=8080,platform=id,project_id=id,project_path='C:\\game.wproj',notify=true}
+  if mode=='legacy_profile' then profile.version=1;profile.links=C.array({{render='C:\\wrong.wav',source_id='obsolete'}}) end
+  local saved_profile
   local w={connected=false,platforms={{id=id,name='Windows'}}}
   function w:project() return {id=id,file=mode=='wrong_project' and 'C:\\other.wproj' or 'C:\\game.wproj'} end
   function w:connect() self.connected=true;return self:project(),{} end
+  function w:catalog(p) assert(self:project().file==p.project_path,'Wrong project');return {} end
+  function w:match(path)
+    if mode=='unknown' or (mode=='mixed' and path:find('unknown',1,true)) then return nil,'No existing Wwise Sound named unlinked.' end
+    if mode=='ambiguous' then return nil,'More than one Wwise Sound is named render.' end
+    local result={};for k,v in pairs(link) do result[k]=v end;result.render=path;return result
+  end
   function w:verify() assert(mode~='identity_changed','Identity changed') end
   function w:convert() converted=converted+1;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
   function w:show() shown=shown+1;return true end
   local fs={}
-  function fs:inspect(paths) local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44'} end;return out end
+  function fs:inspect(paths) local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha='old'} end;return out end
   function fs:begin_inspect(paths) return {paths=paths} end
   function fs:poll(job) local out=self:inspect(job.paths);for _,v in ipairs(out) do v.stamp='2:44' end;return out end
   function fs:replace() replaced=replaced+1;return {sha='new',stamp='2:44'} end
@@ -48,8 +56,8 @@ local function scenario(mode)
       if mode=='identity_reused' and now>2 then return '{22222222-2222-2222-2222-222222222222}' end
       return id
     end,
-    GetExtState=function(_,key)return key:match('^profile:') and C.json(profile) or ''end,
-    SetExtState=function()end,DeleteExtState=function()end,time_precise=function()return now end,
+    GetExtState=function(_,key)return mode~='fresh_setup' and key:match('^profile:') and C.json(profile) or ''end,
+    SetExtState=function(_,key,value)if key:match('^profile:') then saved_profile=C.decode(value) end end,DeleteExtState=function()end,time_precise=function()return now end,
     GetSetProjectInfo_String=function()return true,report end,get_action_context=function()return 0,0,0,1 end,
     SetToggleCommandState=function()end,RefreshToolbar2=function()end,atexit=function(f)exit_cb=f end,
     defer=function(f)next_frame=f end,MB=function(message)startup_message=message end}
@@ -63,18 +71,26 @@ local function scenario(mode)
   assert(not startup_message,'Unexpected startup error: '..tostring(startup_message))
   assert(next_frame,'Startup must reach the panel with native APIs only')
   click='Connect to Wwise';next_frame()
+  if mode=='fresh_setup' then click='Use this project';next_frame() end
   toggle=true;next_frame()
   if mode=='unknown' then report='FILE:C:\\unlinked.wav;' end
+  if mode=='competing_outputs' then report='FILE:C:\\one\\render.wav;FILE:C:\\two\\render.wav;' end
+  if mode=='new_filename' then report='FILE:C:\\new.wav;' end
+  if mode=='mixed' then report='FILE:C:\\render.wav;FILE:C:\\unknown.wav;' end
   for _,t in ipairs({2,2.1,3.6,3.7,4.2,4.3,4.4,6}) do now=t;next_frame() end
   local text=table.concat(messages,'\n')
-  if mode=='success' then
+  if mode=='success' or mode=='legacy_profile' or mode=='new_filename' or mode=='fresh_setup' then
     assert(replaced==1 and converted==1 and text:find('Wwise audio updated',1,true))
     click='Show in Wwise';next_frame();assert(shown==1,'Show must target successful container')
+  elseif mode=='mixed' then
+    assert(replaced==1 and converted==1 and text:find('1 skipped',1,true) and not text:find('Wwise audio updated',1,true))
   elseif mode=='conversion_failure' or mode=='stale_artifact' then
     assert(replaced==1 and converted==1 and not text:find('Wwise audio updated',1,true))
     assert(text:find('updates paused',1,true),'Failed conversion must pause')
   else assert(replaced==0 and converted==0,'Rejected case wrote audio: '..mode) end
+  if mode=='legacy_profile' then assert(saved_profile.version==2 and saved_profile.links==nil,'Old manual links must not be reused') end
+  assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity'}) do scenario(mode) end
+for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup'}) do scenario(mode) end
 return total

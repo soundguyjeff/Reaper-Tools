@@ -2,7 +2,7 @@ local C=require('relay.core')
 local M={};M.__index=M
 local allow={
  ['ak.wwise.core.object.get']=true,['ak.wwise.core.getInfo']=true,
- ['ak.wwise.core.getProjectInfo']=true,['ak.wwise.ui.getSelectedObjects']=true,
+ ['ak.wwise.core.getProjectInfo']=true,
  ['ak.wwise.core.audio.convert']=true,['ak.wwise.ui.commands.execute']=true,
  ['ak.wwise.ui.bringToForeground']=true,
 }
@@ -11,7 +11,7 @@ function M:call(uri,args,options,read)
   assert(allow[uri],'Wwise operation is not permitted')
   if uri=='ak.wwise.ui.commands.execute' then assert(args.command=='FindInProjectExplorerSyncGroup1','Only navigation is permitted') end
   if uri=='ak.wwise.core.audio.convert' then
-    assert(#args.objects==1 and C.guid(args.objects[1]),'Conversion must target one approved audio source')
+    assert(#args.objects==1 and C.guid(args.objects[1]),'Conversion must target one matched audio source')
     assert(#args.platforms==1 and #args.languages==1 and args.languages[1]=='SFX','Conversion scope is invalid')
   end
   local r,owned=self.r,{}
@@ -89,36 +89,49 @@ function M:sources()
   for _,s in ipairs(a) do s.language=C.key(s.original):sub(1,#prefix)==prefix and 'SFX' or 'Other' end
   return a
 end
-function M:selected_source()
-  local a=self:call('ak.wwise.ui.getSelectedObjects',{}, {['return']={'id','name','type'}},function(Q,p)return Q.list(p,'objects',function(x)return read_object(Q,x)end)end)
-  assert(#a==1,'Select exactly one existing Sound SFX or audio source in Wwise')
-  local selected=a[1];local sources=self:sources();local candidates={}
-  for _,s in ipairs(sources) do if selected.id==s.id or (selected.type=='Sound' and selected.id==s.parent_id) then candidates[#candidates+1]=s end end
-  assert(#candidates==1,'Select the individual audio source. Containers and sounds with multiple sources cannot be linked automatically.')
-  local source=candidates[1];local sound=self:object(source.parent_id)
-  assert(sound.type=='Sound','Only existing Sound SFX sources are supported')
-  -- Do not convert a sibling/inactive source by accident.
-  local active=self:call('ak.wwise.core.object.get',{from={id={sound.id}}},{['return']={'activeSource'}},function(Q,p)
-    return Q.list(p,'return',function(x)return Q.text(Q.get(x,'activeSource'),'id')end)[1]
-  end)
-  assert(active==source.id,'Select the active audio source for this sound')
-  local container=self:object(sound.parent_id)
-  return source,sound,container,sources
-end
-function M:verify(link,profile)
-  local p=self:project();assert(p.id==profile.project_id and C.key(p.file)==C.key(profile.project_path),'Wrong Wwise project; updates paused')
+function M:check_project(profile)
+  local p=self:project()
+  assert(p.id==profile.project_id and C.key(p.file)==C.key(profile.project_path),'Wrong Wwise project; updates paused')
   local platforms=self:objects({ofType={'Platform'}},{['return']={'id','name'}})
   local valid=false;for _,v in ipairs(platforms) do if v.id==profile.platform then valid=true end end
   assert(valid,'Pinned conversion platform is missing')
-  local all=self:sources();local live
-  for _,s in ipairs(all) do if s.id==link.source_id then live=s end end
-  C.validate_link(link,live,all,p.id,p.file)
-  local sound=self:object(link.sound_id)
-  assert(sound.parent_id==link.container_id,'Sound moved to another container; relink it')
-  local a=self:call('ak.wwise.core.object.get',{from={id={sound.id}}},{['return']={'activeSource'}},function(Q,v)
-    return Q.list(v,'return',function(x)return Q.text(Q.get(x,'activeSource'),'id')end)[1]
+  return p
+end
+function M:catalog(profile)
+  self:check_project(profile)
+  return {sounds=self:objects({ofType={'Sound'}},{['return']={'id','name','type','path','parent'}}),sources=self:sources()}
+end
+function M:active_source(sound_id,platform)
+  return self:call('ak.wwise.core.object.get',{from={id={sound_id}}},{['return']={'activeSource'},platform=platform},function(Q,p)
+    return Q.list(p,'return',function(x)return Q.text(Q.get(x,'activeSource'),'id')end)[1]
   end)
-  assert(a==link.source_id,'Active Wwise source changed; update skipped')
+end
+function M:match(path,profile,catalog)
+  local sound,reason=C.match_sound(path,catalog.sounds)
+  if not sound then return nil,reason end
+  local active=self:active_source(sound.id,profile.platform)
+  local source
+  for _,candidate in ipairs(catalog.sources) do if candidate.id==active then source=candidate end end
+  if not source then return nil,'The matched sound has no active file-based audio source on the selected platform.' end
+  local link={render=path,source_id=source.id,sound_id=sound.id,container_id=sound.parent_id,
+    sound_name=sound.name,sound_path=sound.path,source_path=source.path,original=source.original,
+    project_id=profile.project_id,project_path=profile.project_path}
+  local ok,err=pcall(C.validate_link,link,source,catalog.sources,profile.project_id,profile.project_path)
+  if not ok then return nil,tostring(err) end
+  local container=self:object(sound.parent_id)
+  link.container_path=container.path
+  return link
+end
+function M:verify(link,profile)
+  local catalog=self:catalog(profile)
+  local sound,reason=C.match_sound(link.render,catalog.sounds)
+  assert(sound,reason)
+  assert(sound.id==link.sound_id,'The matching Wwise sound changed during the update')
+  assert(sound.parent_id==link.container_id,'Sound moved to another container during the update; render again')
+  local live
+  for _,s in ipairs(catalog.sources) do if s.id==link.source_id then live=s end end
+  C.validate_link(link,live,catalog.sources,profile.project_id,profile.project_path)
+  assert(self:active_source(sound.id,profile.platform)==link.source_id,'Active Wwise source changed; update skipped')
   return true
 end
 function M:convert(link,platform)

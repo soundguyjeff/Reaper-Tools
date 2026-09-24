@@ -1,8 +1,8 @@
 # Reaper Tools
 
-## Wwise Relay — v0.1.1 Windows test build
+## Wwise Relay — v0.2.0 Windows test build
 
-A small REAPER panel that follows completed renders, replaces explicitly linked **existing Wwise SFX audio**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
+A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
 **[Download Wwise Relay.lua](Wwise%20Relay.lua)** — open the file, then use GitHub's **Download raw file** button. The entire tool is in this one Lua file; you don't need the `src` folder on your PC.
 
@@ -20,9 +20,11 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
 
-### v0.1.1 fix
+### v0.2.0 — automatic matching
 
-Fixes the startup error `attempt to call a nil value (field 'GetProjectGUID')` using native REAPER functions. No additional extension is needed for the fix. Replace the previous Lua file and run it again.
+No manual audio links are needed. `Explosion_01.wav` automatically targets the existing Wwise Sound named `Explosion_01`. Choose the Wwise project and conversion platform once, enable updates, and render. This version also includes the v0.1.1 startup fix for REAPER 7.78 Win64.
+
+Close Relay, synchronize ReaPack, then run it again. Existing project/platform preferences are kept. Old manual audio links are no longer used, and the Audio links tab has been removed.
 
 ### Install once
 
@@ -34,32 +36,33 @@ Fixes the startup error `attempt to call a nil value (field 'GetProjectGUID')` u
 
 The tool uses Windows PowerShell 5.1 for file validation and replacement. It does not change PowerShell policy, require administrator rights, contact the internet, or use the game engine. If your organization's policy blocks PowerShell, Relay will stop with a message; do not relax the policy for this tool.
 
-### Link your audio once
+### How filenames find their sounds
 
-For each render output:
+Relay removes the final `.wav` extension and looks for that complete **Sound object name** in the pinned Wwise project. ASCII letter case is ignored; punctuation, spaces and version suffixes are kept. Non-ASCII characters must match exactly. There is no fuzzy matching or matching by container name.
 
-1. Select its existing Sound SFX or individual active audio source in Wwise.
-2. In **Audio links**, choose the existing rendered WAV, then **Read selected Wwise source**.
-3. Check the displayed path and Wwise object, then **Save approved link**.
+- One matching Sound: use its active SFX file source on your chosen platform and replace the original file Wwise already references. The original WAV's own filename can differ from the Sound name.
+- No matching Sound, or more than one Sound with that name: skip the WAV and show why. No new object or audio is imported.
+- Shared original, localized voice, or no active file source: skip it.
+- Two outputs in the same detected batch targeting the same sound/original: skip both rather than let processing order choose a winner.
 
-Linking reads the audio and saves a mapping; it does not replace it. Use stable render filenames. A renamed/version-numbered output needs its own explicit link. Sounds containing multiple sources require selecting the individual active source. Each original WAV must belong to only one Wwise source.
+Each render gets a fresh match. Renaming a render does not require setting up a link, provided the new filename matches a unique existing Sound. **Show file results** displays the matched Wwise object path. Nothing needs to be selected in Wwise.
 
 ### During work
 
-Turn on **Update after render**, then render through NVK as usual. Leave Relay running. After a completed output is stable, Relay checks its link, replaces the original, requests conversion, and verifies the converted file. The compact panel starts at 440 × 300 and can be resized/docked using ReaImGui's normal window controls.
+Turn on **Update after render**, then render through NVK as usual. Leave Relay running. After a completed output is stable, Relay finds and verifies its matching sound, replaces the original, requests conversion, and verifies the converted file. The compact panel starts at 440 × 300 and can be resized/docked using ReaImGui's normal window controls.
 
 **Wwise audio updated** means the replacement's bytes were verified, Wwise returned no conversion warnings/errors, and converted media passed a file check. **Show in Wwise** selects the updated parent container; if several were updated, choose one from the list. Your existing **Connect to Remote Platform** workflow remains in Wwise. Relay does not claim it has verified what played in the game.
 
-An unlinked render is skipped. A failure pauses further replacements and lists any files that were not processed. Fix the cause and use **Retry failed linked files**, or re-enable and render again. If conversion fails after replacement, the new original remains in place. There is no rollback: **no previous-WAV backup is created**, as requested.
+An unmatched or ambiguous render is skipped. A failure pauses further replacements and lists any files that were not processed. Fix the cause and use **Retry skipped / failed files**, or re-enable and render again. If conversion fails after replacement, the new original remains in place. There is no rollback: **no previous-WAV backup is created**, as requested.
 
 ### Scope and limits
 
 - No imports, object creation/deletion, project saves, SoundBank generation, conversion-setting changes or source-control checkout. The existing original and its converted cache are the intended changes.
-- Exact project identity, source ID, parent, active source, original path and destination content are checked. Wrong projects, shared originals, externally modified destinations, read-only files, missing files and channel-count changes are rejected.
+- Exact project identity, unique sound name, source ID, parent, active source, original path and destination content are checked. Wrong projects, shared originals, read-only files, missing files and channel-count changes are rejected. The current original is hashed immediately before each replacement; if it changes during staging, replacement is rejected. Earlier edits are not remembered as conflicts between renders.
 - Standard local RIFF WAV files only: PCM, float or extensible. No network paths, symbolic links/junctions, RF64/BW64, localized voice audio or semicolons in paths in this release. Render to a separate folder, not directly into Wwise Originals.
 - Detection uses REAPER's latest completed `RENDER_STATS` report plus the listed files' timestamps/size. This is not a direct NVK callback. If NVK runs several native render groups before deferred scripts resume, only the final group's report may be visible. **Test your multi-group NVK workflow before relying on batch coverage.** Check the reported count against your outputs.
 - A manual edit to a WAV still named in the last render report can also look like a new render. Pause Relay while externally editing those files. Merely opening Relay or enabling it establishes a baseline and does not replay old renders.
-- Updates are sequential, not a batch transaction. Successful earlier files remain updated if a later one fails. Wwise/REAPER operations and large file hashing can briefly block the UI. Do not rename/reorganize the linked Wwise objects while a batch is updating.
+- Updates are sequential, not a batch transaction. Successful earlier files remain updated if a later one fails. Wwise/REAPER operations and large file hashing can briefly block the UI. Do not rename/reorganize the matched Wwise objects while a batch is updating.
 
 Settings stay locally in REAPER's extension settings, keyed to the REAPER project’s master-track ID. The generated helper and short-lived requests live in REAPER's resource folder under `Data/WwiseRelay`. Temporary audio contains only the new rendered bytes and is removed after replacement; it is not a backup of the old WAV.
 

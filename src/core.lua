@@ -1,4 +1,4 @@
-local M = { VERSION = '0.1.1', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.0', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -94,23 +94,50 @@ function M.render_files(stats)
   end
   return files
 end
-function M.index_links(links)
-  local out={}
-  for _,link in ipairs(links or {}) do
-    local k=M.key(link.render)
-    assert(not out[k],'Duplicate render path in profile')
-    assert(M.guid(link.source_id) and M.guid(link.sound_id) and M.guid(link.container_id),'Invalid linked ID')
-    assert(M.absolute(link.render) and M.absolute(link.original),'Absolute file paths required')
-    assert(M.key(link.render)~=M.key(link.original),'Render directly into Originals is not supported')
-    out[k]=link
+-- Match a complete filename stem, never a prefix, substring or version-stripped name.
+function M.sound_name(path)
+  local base=M.basename(path)
+  if not M.absolute(path) or not base or not base:lower():match('%.wav$') or path:find(';',1,true) then return nil end
+  local name=base:sub(1,-5)
+  return name~='' and name or nil
+end
+function M.match_sound(path,sounds)
+  local name=M.sound_name(path)
+  if not name then return nil,'Expected a local rendered WAV filename.' end
+  local found
+  for _,sound in ipairs(sounds) do
+    if sound.type=='Sound' and type(sound.name)=='string' and sound.name:lower()==name:lower() then
+      if found then return nil,'More than one Wwise Sound is named "'..name..'"; no audio was changed for this file.' end
+      found=sound
+    end
   end
-  return out
+  if not found then return nil,'No existing Wwise Sound named "'..name..'".' end
+  return found
+end
+-- Reject all competing outputs, so order cannot decide which WAV wins.
+function M.reject_collisions(items)
+  local owners={}
+  for _,item in ipairs(items) do
+    if item.link then
+      for _,key in ipairs({'sound:'..item.link.sound_id,'original:'..M.key(item.link.original)}) do
+        owners[key]=owners[key] or {};owners[key][#owners[key]+1]=item
+      end
+    end
+  end
+  for _,group in pairs(owners) do
+    if #group>1 then for _,item in ipairs(group) do
+      item.skip_reason='Multiple rendered WAVs target the same Wwise sound/original; all competing files were skipped.'
+    end end
+  end
+  for _,item in ipairs(items) do if item.skip_reason then item.link=nil end end
 end
 function M.validate_link(link,live,all_sources,project_id,project_path)
+  assert(M.guid(link.source_id) and M.guid(link.sound_id) and M.guid(link.container_id),'Invalid matched object ID')
+  assert(M.absolute(link.render) and M.absolute(link.original),'Absolute file paths required')
   assert(project_id==link.project_id and M.key(project_path)==M.key(link.project_path),'Wrong Wwise project')
-  assert(live and live.id==link.source_id and live.type=='AudioFileSource','Linked source is missing or changed')
-  assert(live.parent_id==link.sound_id,'Linked source moved to another sound')
-  assert(M.key(live.original)==M.key(link.original),'Wwise original path changed; relink this source')
+  assert(live and live.id==link.source_id and live.type=='AudioFileSource','Matched source is missing or changed')
+  assert(live.parent_id==link.sound_id,'Matched source moved to another sound')
+  assert(M.key(live.original)==M.key(link.original),'Wwise original path changed during the update; render again')
   assert(live.language=='SFX','Only SFX sources are supported in this release')
   assert(M.key(link.original)~=M.key(link.render),'Render and original paths must differ')
   local count=0
@@ -131,12 +158,14 @@ local Detector={};Detector.__index=Detector
 function M.detector() return setmetatable({seen={},pending={},ready_at=0},Detector) end
 function Detector:baseline(items)
   self.pending={}
-  for _,v in ipairs(items) do if v.ok then self.seen[M.key(v.path)]=v.stamp end end
+  for _,v in ipairs(items) do self.seen[M.key(v.path)]=v.ok and v.stamp or false end
 end
 function Detector:observe(items,now)
   for _,v in ipairs(items) do
     local k=M.key(v.path)
-    if v.ok and v.stamp~=self.seen[k] then
+    if v.ok and self.seen[k]==false then
+      self.seen[k]=v.stamp -- Unreadable old report entry: first readable signature is a baseline.
+    elseif v.ok and v.stamp~=self.seen[k] then
       self.seen[k]=v.stamp;self.pending[k]=v;self.ready_at=now+2
     end
   end

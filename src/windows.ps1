@@ -81,7 +81,7 @@ try {
       $original=[IO.File]::Open($dst,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
       $old=WaveInfo $original
       if ($old.channels -ne $wi.channels) { throw 'Channel count changed; update skipped.' }
-      if ((HashStream $original) -ne $req.destinationSha) { throw 'Wwise original was edited since linking or the last update; relink to accept it.' }
+      if ((HashStream $original) -ne $req.destinationSha) { throw 'Wwise original changed while preparing this update; render again after the other edit finishes.' }
       $original.Dispose();$original=$null
       $temp=Join-Path ([IO.Path]::GetDirectoryName($dst)) ('.wwise-relay-'+[guid]::NewGuid().ToString('N')+'.tmp')
       $out=[IO.File]::Open($temp,[IO.FileMode]::CreateNew,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
