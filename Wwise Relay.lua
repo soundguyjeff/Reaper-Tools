@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.2.2
+-- @version 0.2.3
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaWwise and ReaImGui 0.9.3+.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- No Wwise objects are created, no audio is imported, no WAV backups are made.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.2.2', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.3', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -454,7 +454,7 @@ public static class RelayLauncher {
   }
 }
 ]==]
-  local launch='$ErrorActionPreference="Stop"; try { Add-Type -TypeDefinition '..literal(native)..'; '
+  local launch='$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; try { Add-Type -TypeDefinition '..literal(native)..'; '
     ..'$exe='..literal(exe)..'; $arguments='..literal(args)..'; '
     ..'$childId=[RelayLauncher]::Start($exe,$arguments); @{ok=$true;pid=$childId}|ConvertTo-Json -Compress '
     ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'

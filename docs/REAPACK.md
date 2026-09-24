@@ -1,6 +1,6 @@
 # Install through ReaPack
 
-The repository includes `index.xml` with **Wwise Relay 0.2.2**, with quiet background file checks, automatic filename-to-sound matching and the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
+The repository includes `index.xml` with **Wwise Relay 0.2.3**, with quiet background file checks, automatic filename-to-sound matching and the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
 
 ## Repository URL
 

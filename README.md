@@ -1,6 +1,6 @@
 # Reaper Tools
 
-## Wwise Relay — v0.2.2 Windows test build
+## Wwise Relay — v0.2.3 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -20,11 +20,11 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
 
-### v0.2.2 — quiet file checks and Windows startup fix
+### v0.2.3 — quiet file checks and Windows startup fixes
 
 Replaces the repeating PowerShell launches with one background inspector created without a console window. Failed WAV checks now show the filename and actual error, then pause after an eight-second grace period for files still being written. The inspector stops when Relay is paused/closed and expires after being idle; it starts again when needed. It is read-only: audio replacement still runs through the existing verified replacement operation.
 
-The v0.2.1 Windows bridge check exposed a startup hang caused by inherited process handles. v0.2.2 launches the inspector with Windows CreateProcessW, no inherited handles and CREATE_NO_WINDOW. This launcher requires PowerShell Add-Type; blocked compilation produces an error and pauses updates.
+The v0.2.1 Windows bridge check exposed a startup hang caused by inherited process handles. v0.2.3 launches the inspector with Windows CreateProcessW, no inherited handles and CREATE_NO_WINDOW. v0.2.3 also suppresses Windows PowerShell first-use progress text so it cannot corrupt the launcher response. This launcher requires PowerShell Add-Type; blocked compilation produces an error and pauses updates.
 
 The recording of the v0.2.0 failure established the repeating console-window problem. It did not reveal the underlying WAV inspection error; the new file-error display makes that visible instead of leaving the panel silently waiting.
 

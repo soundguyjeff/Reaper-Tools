@@ -103,7 +103,7 @@ public static class RelayLauncher {
   }
 }
 ]==]
-  local launch='$ErrorActionPreference="Stop"; try { Add-Type -TypeDefinition '..literal(native)..'; '
+  local launch='$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; try { Add-Type -TypeDefinition '..literal(native)..'; '
     ..'$exe='..literal(exe)..'; $arguments='..literal(args)..'; '
     ..'$childId=[RelayLauncher]::Start($exe,$arguments); @{ok=$true;pid=$childId}|ConvertTo-Json -Compress '
     ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'
