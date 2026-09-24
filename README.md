@@ -1,6 +1,6 @@
 # Reaper Tools
 
-## Wwise Relay — v0.3.0 Windows test build
+## Wwise Relay — v0.3.1 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -19,6 +19,12 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 ```
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
+
+### v0.3.1 — automatic Wwise connection
+
+Open Relay and it connects in the background automatically. If Wwise is unavailable, the panel shows **Waiting for Wwise** and retries after 2, 4, 8, 16, then 30 seconds between attempts. It checks the connection while idle and verifies the saved project before accepting it. **Retry now** is available in Setup; changing the WAAPI port also starts a fresh attempt.
+
+Connecting does not enable audio updates. First-time setup still needs **Use this project** and a conversion platform. Existing settings are kept. A detected connection loss or wrong project pauses enabled updates; after reconnecting, re-enable them when ready. Failed or uncertain audio updates are not replayed automatically. **Stop waiting** pauses automatic connection attempts until **Resume auto-connect** is clicked in Setup.
 
 ### v0.3.0 — keep REAPER responsive
 
@@ -42,7 +48,7 @@ Close Relay, synchronize ReaPack, then run it again. Existing project/platform p
 2. Copy `Wwise Relay.lua` into your REAPER Scripts folder.
 3. Open **Actions → Show action list → New action → Load ReaScript**, select the Lua file, and run it. You can give it a toolbar button.
 4. Enable **Wwise Authoring API (WAAPI)** in Wwise's preferences. Relay connects locally to `127.0.0.1`, normally port `8080`.
-5. In Relay's **Setup** tab: **Connect to Wwise → Use this project**, then select the conversion platform used by your remote game connection.
+5. Open Relay and wait for **Connected**. On first use, choose **Use this project** in **Setup**, then select the conversion platform used by your remote game connection.
 
 The tool uses Windows Script Host for hidden startup and Windows PowerShell 5.1 for local WAAPI communication and file operations. It does not change PowerShell policy, require administrator rights, contact the internet, or use the game engine. If your organization's policy blocks PowerShell, Relay will stop with a message; do not relax the policy for this tool.
 

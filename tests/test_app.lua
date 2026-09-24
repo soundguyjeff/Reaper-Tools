@@ -6,6 +6,7 @@ local function scenario(mode)
   local replaced,converted,shown=0,0,0
   local next_frame,exit_cb
   local ui_frames,closed=0,0
+  local attempts,attempt_times=0,{}
   local messages={}
   local master={}
   local startup_message
@@ -16,8 +17,17 @@ local function scenario(mode)
   if mode=='legacy_profile' then profile.version=1;profile.links=C.array({{render='C:\\wrong.wav',source_id='obsolete'}}) end
   local saved_profile
   local w={connected=false,platforms={{id=id,name='Windows'}}}
-  function w:project() return {id=id,file=mode=='wrong_project' and 'C:\\other.wproj' or 'C:\\game.wproj'} end
-  function w:connect() if mode=='connect_stall' then for _=1,1000 do coroutine.yield() end end;self.connected=true;return self:project(),{} end
+  function w:project()
+    if mode=='disconnect' and now>=5 and now<20 then error('Wwise closed') end
+    local wrong=mode=='wrong_project' or (mode=='wrong_then_right' and now<10)
+    return {id=id,file=wrong and 'C:\\other.wproj' or 'C:\\game.wproj'}
+  end
+  function w:connect()
+    attempts=attempts+1;attempt_times[#attempt_times+1]=now
+    if mode=='never_available' or (mode=='late_start' and now<10) then error('Wwise unavailable') end
+    if mode=='connect_stall' then for _=1,1000 do coroutine.yield() end end
+    self.connected=true;return self:project(),{}
+  end
   function w:catalog(p) assert(self:project().file==p.project_path,'Wrong project');return {} end
   function w:match(path)
     if mode=='unknown' or (mode=='mixed' and path:find('unknown',1,true)) then return nil,'No existing Wwise Sound named unlinked.' end
@@ -35,7 +45,7 @@ local function scenario(mode)
     self.probes=self.probes+1
     local out=self:inspect(job.paths)
     for _,v in ipairs(out) do
-      v.stamp='2:44'
+      v.stamp=mode=='disconnect' and '1:44' or '2:44'
       if mode=='inspection_failure' or (mode=='temporary_lock' and self.probes==1) then v.ok=false;v.error='WAV is locked or unreadable' end
     end
     return out
@@ -56,7 +66,7 @@ local function scenario(mode)
   I.TextColored=function(_,_,v)messages[#messages+1]=v end
   I.TextWrapped=function(_,v)messages[#messages+1]=v end
   package.loaded.imgui=nil;package.preload.imgui=function()return function()return I end end
-  reaper={ImGui_GetBuiltinPath=function()return '.'end,GetOS=function()return 'Win64'end,
+  reaper={ImGui_GetBuiltinPath=function()return '.'end,GetOS=function()return mode=='mac_preview' and 'OSX64' or 'Win64'end,
     EnumProjects=function()return mode=='project_switched' and now>2 and 2 or 1 end,
     -- Deliberately no GetProjectGUID: it does not exist in native REAPER.
     GetMasterTrack=function(project) assert(project==1);if mode~='missing_master' then return master end end,
@@ -81,10 +91,35 @@ local function scenario(mode)
   assert(not startup_message,'Unexpected startup error: '..tostring(startup_message))
   assert(next_frame,'Startup must reach the panel with native APIs only')
   local function frames(n) for _=1,n do next_frame() end end
-  click='Connect to Wwise';frames(5)
+  frames(5) -- Startup connects without clicking any button.
+  if mode=='mac_preview' then
+    now=100;frames(10);assert(attempts==0 and replaced==0);exit_cb();total=total+1;return
+  end
+  if mode=='never_available' or mode=='late_start' or mode=='wrong_then_right' then
+    assert(attempts==1 and not w.connected)
+    now=1;frames(20);assert(attempts==1,'Retry ran before its delay')
+    for _,t in ipairs({2,6,14,30,60}) do now=t;frames(10) end
+    assert(replaced==0 and converted==0,'Auto-connect performed an audio update')
+    if mode=='never_available' then
+      assert(attempts==6 and not w.connected)
+      for i,t in ipairs({0,2,6,14,30,60}) do assert(attempt_times[i]==t,'Retry backoff changed') end
+    else assert(w.connected and attempts==4,'Did not recover when the saved project became available') end
+    exit_cb();total=total+1;return
+  end
+  if mode=='disconnect' then
+    assert(w.connected and attempts==1)
+    toggle=true;frames(4)
+    for _,t in ipairs({2,3,5,7,11,19,35,40}) do now=t;frames(10) end
+    assert(w.connected and attempts>1,'Did not reconnect after Wwise restarted')
+    assert(replaced==0 and converted==0,'Reconnection replayed audio')
+    assert(table.concat(messages,'\n'):find('Audio updates are paused',1,true))
+    exit_cb();total=total+1;return
+  end
   if mode=='connect_stall' then
     local before=ui_frames;frames(100);assert(ui_frames==before+100 and replaced==0)
     click='Stop waiting';frames(2);assert(closed>0 and table.concat(messages,'\n'):find('Stopped waiting',1,true))
+    now=100;frames(30);assert(attempts==1,'Stop waiting must suppress automatic retries')
+    click='Resume auto-connect';frames(5);assert(attempts==2,'Resume did not restart the connection')
     exit_cb();total=total+1;return
   end
   if mode=='fresh_setup' then click='Use this project';frames(3) end
@@ -118,5 +153,5 @@ local function scenario(mode)
   assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
+for _,mode in ipairs({'never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
 return total

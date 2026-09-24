@@ -4,7 +4,7 @@ No remote access or internet connection is required at runtime. These checks are
 
 Start with one disposable existing SFX in a test project. Relay intentionally keeps no WAV backup.
 
-1. **Open:** Load the script and confirm the compact panel opens without an error. Connect to Wwise 2024.1.1, pin the project and choose the correct platform.
+1. **Open:** Load the script and confirm the compact panel opens without an error. Wait for the automatic connection to Wwise 2024.1.1, pin the project and choose the correct platform.
 2. **Name:** Give the rendered WAV the same name as the existing Wwise Sound (for example, `Explosion_01.wav` and `Explosion_01`). Do not set up a link or select the sound in Wwise. Merely connecting/enabling must not change the original audio.
 3. **Enable:** Turn on Update after render. Old renders must not be sent immediately. No PowerShell or terminal window should appear during file checks. The inspector is reused, and stops when Relay is paused or closed.
 4. **Render:** Make an obvious audible change and render through your usual NVK action. Confirm Show file results lists the intended Wwise Sound path. After the render finishes, expect “1 replaced + converted” and “Wwise audio updated.” Check the result in Wwise, then through your existing remote game connection.
@@ -24,7 +24,9 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 
 16. **Dropbox/cloud paths:** With a rendered WAV available offline in your normal Dropbox folder, confirm it can be inspected and updated. If a path is still rejected, the message should identify the exact link or show an unsupported marker code. Automated tests cover the cloud-tag classifier and real Windows junctions; they do not run Dropbox itself.
 
-17. **Responsiveness:** With Wwise closed or the port incorrect, click Connect. REAPER should remain usable and Relay must show an error instead of hanging. While waiting, try Stop waiting. After connecting correctly, confirm REAPER stays usable during file checking and conversion. Stopping does not undo a WAV already replaced or cancel a conversion already sent to Wwise.
+17. **Responsiveness:** Open Relay with Wwise closed or the port incorrect. REAPER should remain usable and Relay must show an error instead of hanging. While waiting, try Stop waiting. After Wwise becomes available and connects automatically, confirm REAPER stays usable during file checking and conversion. Stopping does not undo a WAV already replaced or cancel a conversion already sent to Wwise.
+
+18. **Automatic connection:** Start Relay before Wwise. It should display Waiting for Wwise and retry without clicks or popups. Open the saved Wwise project and wait for Connected. Confirm an unrelated project is not accepted. Stop waiting must pause retries; Resume auto-connect restarts them. Connecting/reconnecting alone must never replace audio.
 
 If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versions, and whether it was a single render or multiple NVK groups. You can redact project names and paths; audio/project files are not needed to report a problem.
 

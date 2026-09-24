@@ -35,9 +35,10 @@ if saved~='' then
 end
 local fs=F.new(r,worker)
 local w=W.new(r,profile.port,fs)
-local s={enabled=false,status='Ready to set up',detail='Connect to Wwise and choose your project and platform.',error=startup_error,
+local s={enabled=false,status='Waiting for Wwise',detail='Relay connects automatically. Open Wwise with WAAPI enabled.',error=startup_error,
   results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
-  tab='Setup',toast='',toast_until=0,selected_container=1,last_files={}}
+  tab='Setup',toast='',toast_until=0,selected_container=1,last_files={},
+  auto_connect=true,next_connection=0,retry_delay=2,connection_status='Waiting for Wwise',connection_detail=''}
 local heartbeat_key='instance:'..project_guid
 local now=r.time_precise()
 local prior=tonumber(r.GetExtState(C.SECTION,heartbeat_key)) or 0
@@ -47,12 +48,7 @@ local function save() r.SetExtState(C.SECTION,key,C.json(profile),true) end
 local function toast(text) s.toast=text;s.toast_until=r.time_precise()+6 end
 local function pause(message)
   fs:close_monitor()
-  s.enabled=false;s.detector:cancel();s.pending={};s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
-end
-local function guard(fn)
-  local ok,err=pcall(fn)
-  if not ok then pause(err) end
-  return ok
+  s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
 end
 local function schedule(fn)
   if s.task then return end
@@ -74,15 +70,54 @@ local function matched_project(p)
 end
 local function connect()
   assert(win,'This is a Windows tool. The panel can be previewed on this Mac, but live updates are disabled.')
-  w.port=profile.port;s.status='Connecting to Wwise';s.detail='Waiting for Wwise. REAPER remains available.'
+  w.port=profile.port;s.connection_status='Connecting to Wwise';s.connection_detail=''
+  if not s.error and #s.results==0 and not s.enabled then s.status='Connecting to Wwise';s.detail='REAPER remains available while connecting.' end
   coroutine.yield()
   local p,info=w:connect()
   if profile.project_id then assert(matched_project(p),'Open the pinned project in Wwise: '..profile.project_path) end
-  s.connected_project=p;s.error=nil;s.status='Connected';s.detail='Ready to match rendered filenames to existing Wwise sounds.'
-  s.info=info
+  s.connected_project=p;s.info=info
+  s.connection_status='Connected';s.connection_detail=''
+  if not s.error and #s.results==0 and not s.enabled then
+    s.status='Connected';s.detail=profile.project_id and 'Enable Update after render when you are ready.' or 'Choose Use this project and your platform in Setup.'
+  end
+end
+-- Connection attempts are read-only and use the same yielding background path
+-- as transfers. A reconnect never enables updates or retries an uncertain write.
+local function connection_tick(time)
+  if not win or not s.auto_connect or s.job or s.busy or time<s.next_connection then return end
+  if w.connected then
+    local ok,p=pcall(function()
+      local live=w:project()
+      if profile.project_id then assert(matched_project(live),'Open the pinned project in Wwise: '..profile.project_path)
+      elseif s.connected_project then assert(live.id==s.connected_project.id and C.key(live.file)==C.key(s.connected_project.file),'Wwise project changed') end
+      return live
+    end)
+    if ok then s.next_connection=r.time_precise()+5;return end
+    w.connected=false;s.connected_project=nil
+    fs:close_monitor()
+    if s.enabled then pause('Wwise connection changed or became unavailable. Audio updates are paused; re-enable them after reconnection.') end
+    s.connection_status='Waiting for Wwise';s.connection_detail=tostring(p)
+    s.next_connection=r.time_precise()+2;s.retry_delay=2
+    return
+  end
+  local ok,err=pcall(connect)
+  if ok then
+    s.retry_delay=2;s.next_connection=r.time_precise()+5
+  else
+    w.connected=false;s.connected_project=nil;fs:close_monitor()
+    s.connection_status='Waiting for Wwise';s.connection_detail=tostring(err)
+    s.next_connection=r.time_precise()+s.retry_delay;s.retry_delay=math.min(s.retry_delay*2,30)
+    if not s.error and #s.results==0 then
+      s.status='Waiting for Wwise';s.detail=profile.project_id and 'Reconnecting automatically. Open the saved Wwise project with WAAPI enabled.' or 'Reconnecting automatically. Open Wwise with WAAPI enabled.'
+    end
+  end
+end
+local function retry_connection()
+  s.auto_connect=true;s.next_connection=0;s.retry_delay=2
+  s.connection_status='Waiting for Wwise';s.connection_detail=''
 end
 local function pin()
-  assert(s.connected_project,'Connect to Wwise first')
+  assert(w.connected and s.connected_project,'Waiting for a Wwise connection')
   current_project()
   assert(not profile.project_id or matched_project(s.connected_project),'The pinned Wwise project must remain open')
   profile.project_id=s.connected_project.id;profile.project_path=s.connected_project.file;profile.project_name=s.connected_project.name
@@ -98,8 +133,8 @@ local function platform_name()
 end
 local function enable()
   fs:close_monitor();s.inspect_failure=nil
-  current_project();assert(win,'Live updates require Windows');assert(w.connected,'Connect to Wwise first')
-  assert(profile.project_id,'Connect and choose Use this project in Setup first')
+  current_project();assert(win,'Live updates require Windows');assert(w.connected,'Waiting for Wwise to connect automatically')
+  assert(profile.project_id,'Choose Use this project in Setup first')
   assert(matched_project(w:project()),'Wrong Wwise project')
   local valid=false;for _,p in ipairs(w.platforms) do if p.id==profile.platform then valid=true end end
   assert(valid,'Select a valid conversion platform')
@@ -177,10 +212,14 @@ end
 local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
   if s.busy then process_one();return end
-  if not s.enabled then return end
+  connection_tick(time)
+  if not s.enabled or not w.connected then return end
   current_project()
   local report=stats()
-  if report=='' then s.detector:cancel();s.last_stats='';s.last_files={};s.job=nil;s.inspect_failure=nil;fs:close_monitor();return end
+  if report=='' then
+    if s.job then fs:close_monitor() end
+    s.detector:cancel();s.last_stats='';s.last_files={};s.job=nil;s.inspect_failure=nil;return
+  end
   local files=C.render_files(report)
   if #files==0 then return end
   if s.job then
@@ -258,9 +297,12 @@ end
 local function setup_tab()
   I.BeginDisabled(ctx,s.busy or s.enabled or s.working)
   local changed,port=I.InputInt(ctx,'WAAPI port',profile.port)
-  if changed then profile.port=math.max(1,math.min(65535,port));save() end
-  button('Connect to Wwise',connect)
-  if s.connected_project then
+  if changed then
+    profile.port=math.max(1,math.min(65535,port));save()
+    w.connected=false;s.connected_project=nil;fs:close_monitor();retry_connection()
+  end
+  if not w.connected then button(s.auto_connect and 'Retry now' or 'Resume auto-connect',retry_connection) end
+  if w.connected and s.connected_project then
     text(s.connected_project.file)
     button('Use this project',pin)
   end
@@ -275,6 +317,7 @@ local function setup_tab()
   text('Conversion uses existing Wwise settings. No object creation, imports, SoundBanks, or WAV backups.')
   I.EndDisabled(ctx)
   if s.enabled then text('Pause updates to change setup.') end
+  if s.connection_detail~='' then text(s.connection_detail) end
   if s.error then I.Separator(ctx);text(s.error) end
 end
 local function ui()
@@ -282,17 +325,22 @@ local function ui()
   local visible,open=I.Begin(ctx,'Wwise Relay',true)
   if visible then
     I.Text(ctx,profile.project_name or 'No Wwise project linked')
-    I.BeginDisabled(ctx,s.busy or s.working or not win)
+    I.BeginDisabled(ctx,s.busy or s.working or not win or not w.connected)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
-      if enabled then schedule(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
+      if enabled then schedule(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)
     if s.working and I.Button(ctx,'Stop waiting') then
-      s.task=nil;s.working=false;w.connected=false;s.job=nil
+      s.task=nil;s.working=false;w.connected=false;s.job=nil;s.connected_project=nil;s.auto_connect=false
+      s.connection_status='Auto-connect paused';s.connection_detail='Use Resume auto-connect in Setup when ready.'
       pause('Stopped waiting. A replacement or conversion already requested may have occurred. Check Wwise before reconnecting or retrying.')
     end
-    I.TextColored(ctx,muted,(w.connected and ('Connected · '..platform_name()) or 'Not connected')..'  |  v'..C.VERSION)
+    local connection=w.connected and ('Connected · '..platform_name()) or s.connection_status
+    if not w.connected and s.auto_connect and not s.working then
+      connection=connection..' · retry in '..math.max(0,math.ceil(s.next_connection-r.time_precise()))..'s'
+    end
+    I.TextColored(ctx,muted,connection..'  |  v'..C.VERSION)
     if not win then I.TextColored(ctx,amber,'UI preview — live updates require Windows') end
     if I.BeginTabBar(ctx,'views') then
       for _,t in ipairs({'Latest render','Setup'}) do
