@@ -10,6 +10,10 @@ A small REAPER panel that follows completed renders, replaces explicitly linked 
 
 This is a first test build. Automated logic, simulated workflows and synthetic file tests do not establish live REAPER/NVK/Wwise compatibility. The remaining checks happen on your Windows machine. No connection to that machine is needed.
 
+### ReaPack
+
+[ReaPack installation and update guide](docs/REAPACK.md). The feed is prepared in `index.xml`; the normal GitHub install URL requires public access. This repository remains private until its owner approves a distribution option.
+
 ### v0.1.1 fix
 
 Fixes the startup error `attempt to call a nil value (field 'GetProjectGUID')` using native REAPER functions. No additional extension is needed for the fix. Replace the previous Lua file and run it again.
