@@ -2,13 +2,9 @@
 
 The repository includes `index.xml` with **Wwise Relay 0.1.1**, including the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
 
-## Repository access
+## Repository URL
 
-The repository is currently private. The normal GitHub raw-file URL below is **not usable as an unauthenticated ReaPack feed while it remains private**. Signing into GitHub in a browser does not sign ReaPack in. Both the index and the Lua download need to be reachable by ReaPack.
-
-A public repository or a separate public distribution repository can provide the simple install/update link. Changing visibility requires the owner's approval. No account tokens are embedded in this index or the package.
-
-Once this repository is publicly accessible, import:
+The repository and package downloads are public. No GitHub sign-in or account token is required. Import this URL:
 
 ```
 https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml

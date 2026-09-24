@@ -12,7 +12,13 @@ This is a first test build. Automated logic, simulated workflows and synthetic f
 
 ### ReaPack
 
-[ReaPack installation and update guide](docs/REAPACK.md). The feed is prepared in `index.xml`; the normal GitHub install URL requires public access. This repository remains private until its owner approves a distribution option.
+Import this URL using **Extensions → ReaPack → Import repositories**, then browse packages and install **Wwise Relay**:
+
+```
+https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
+```
+
+[ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
 
 ### v0.1.1 fix
 
