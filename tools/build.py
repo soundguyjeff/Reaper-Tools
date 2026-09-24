@@ -11,11 +11,11 @@ header = '''-- @description Wwise Relay - update existing Wwise audio after REAP
 '''
 parts = [header]
 for name in ('core', 'wwise', 'files'):
-    parts.append(f"package.preload['relay.{name}'] = function()\n" + (ROOT/'src'/f'{name}.lua').read_text() + '\nend\n')
-worker = (ROOT/'src/windows.ps1').read_text()
+    parts.append(f"package.preload['relay.{name}'] = function()\n" + (ROOT/'src'/f'{name}.lua').read_text(encoding='utf-8') + '\nend\n')
+worker = (ROOT/'src/windows.ps1').read_text(encoding='utf-8')
 assert ']====]' not in worker
 parts.append("package.preload['relay.worker'] = function() return [====[\n" + worker + ']====] end\n')
-parts.append((ROOT/'src/app.lua').read_text())
+parts.append((ROOT/'src/app.lua').read_text(encoding='utf-8'))
 target = ROOT/'Wwise Relay.lua'
 target.write_text('\n'.join(parts), encoding='utf-8', newline='\n')
 print(f'Built {target.name}: {target.stat().st_size:,} bytes')
