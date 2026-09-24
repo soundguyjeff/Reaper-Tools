@@ -38,6 +38,10 @@
         <source main="main" platform="win64" hash="122023903ae8e68ef5cbcf39e6a8d4faa43185f1de2af034fce005a3f27cd7672821">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/a2e93d3af5d3fe77420be4b4a2cfe2aeef02f48d/Wwise%20Relay.lua</source>
         <changelog>Automatically connect to Wwise on startup and retry quietly with bounded backoff. Verify the saved project, monitor connection health, and allow Retry now or Resume auto-connect. Reconnection never re-enables or replays audio updates.</changelog>
       </version>
+      <version name="0.3.2" author="Reaper Tools" time="2026-09-24T15:14:37-05:00">
+        <source main="main" platform="win64" hash="12203b7bf454067764fe1250447ab8975fd135ec194556ae7cc529c73790c9e0703c">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/432b8b28b05ca0cccef771af9cbc508a5cd269ae/Wwise%20Relay.lua</source>
+        <changelog>Use targeted name/original lookups for large projects. Refresh only the existing audio source, preserve its original subfolder, verify changed audio identity and the converted WEM hash. Accept valid cached prior versions. Improve timeout diagnostics and hidden-file handling. Tested with real Wwise 2024.1.1 on Mac; native Windows/NVK checks remain.</changelog>
+      </version>
     </reapack>
   </category>
 </index>
