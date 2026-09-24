@@ -10,7 +10,18 @@ local I=require('imgui')('0.9.3')
 local ctx=I.CreateContext('Wwise Relay')
 local win=r.GetOS():match('Win')~=nil
 local proj=r.EnumProjects(-1)
-local project_guid=r.GetProjectGUID(proj)
+-- REAPER has no native GetProjectGUID. The master track provides a persistent
+-- project-local identity using built-in APIs, without requiring SWS.
+local function project_identity(project)
+  local master=r.GetMasterTrack(project)
+  local guid=master and r.GetTrackGUID(master)
+  return C.guid(guid) and guid or nil
+end
+local project_guid=project_identity(proj)
+if not project_guid then
+  r.MB('Could not identify the active REAPER project. Open a project and run Wwise Relay again.','Wwise Relay',0)
+  return
+end
 local key='profile:'..project_guid
 local profile={version=1,links=C.array(),port=8080,platform='',notify=true}
 local saved=r.GetExtState(C.SECTION,key)
@@ -43,7 +54,7 @@ local function guard(fn)
   return ok
 end
 local function current_project()
-  assert(r.EnumProjects(-1)==proj and r.GetProjectGUID(proj)==project_guid,'Active REAPER project changed. Return to the original project and re-enable updates.')
+  assert(r.EnumProjects(-1)==proj and project_identity(proj)==project_guid,'Active REAPER project changed. Return to the original project and re-enable updates.')
 end
 local function stats()
   local ok,value=r.GetSetProjectInfo_String(proj,'RENDER_STATS','',false)

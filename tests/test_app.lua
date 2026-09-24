@@ -6,6 +6,8 @@ local function scenario(mode)
   local replaced,converted,shown=0,0,0
   local next_frame,exit_cb
   local messages={}
+  local master={}
+  local startup_message
   local id='{11111111-1111-1111-1111-111111111111}'
   local link={render='C:\\render.wav',original='C:\\original.wav',source_id=id,sound_id=id,container_id=id,
     project_id=id,project_path='C:\\game.wproj',destination_sha='old',container_path='\\Actor-Mixer Hierarchy\\Container'}
@@ -37,14 +39,29 @@ local function scenario(mode)
   I.TextWrapped=function(_,v)messages[#messages+1]=v end
   package.loaded.imgui=nil;package.preload.imgui=function()return function()return I end end
   reaper={ImGui_GetBuiltinPath=function()return '.'end,GetOS=function()return 'Win64'end,
-    EnumProjects=function()return mode=='project_switched' and now>2 and 2 or 1 end,GetProjectGUID=function()return id end,
+    EnumProjects=function()return mode=='project_switched' and now>2 and 2 or 1 end,
+    -- Deliberately no GetProjectGUID: it does not exist in native REAPER.
+    GetMasterTrack=function(project) assert(project==1);if mode~='missing_master' then return master end end,
+    GetTrackGUID=function(track)
+      assert(track==master,'Identity must come from the master track')
+      if mode=='invalid_identity' then return '' end
+      if mode=='identity_reused' and now>2 then return '{22222222-2222-2222-2222-222222222222}' end
+      return id
+    end,
     GetExtState=function(_,key)return key:match('^profile:') and C.json(profile) or ''end,
     SetExtState=function()end,DeleteExtState=function()end,time_precise=function()return now end,
     GetSetProjectInfo_String=function()return true,report end,get_action_context=function()return 0,0,0,1 end,
     SetToggleCommandState=function()end,RefreshToolbar2=function()end,atexit=function(f)exit_cb=f end,
-    defer=function(f)next_frame=f end,MB=function(message)error(message)end}
+    defer=function(f)next_frame=f end,MB=function(message)startup_message=message end}
   assert(loadfile(ROOT..'/src/app.lua'))()
   assert(replaced==0 and converted==0,'Startup must never write audio')
+  if mode=='missing_master' or mode=='invalid_identity' then
+    assert(startup_message and startup_message:find('Could not identify',1,true))
+    assert(not next_frame,'Invalid identity must stop before the update loop')
+    total=total+1;return
+  end
+  assert(not startup_message,'Unexpected startup error: '..tostring(startup_message))
+  assert(next_frame,'Startup must reach the panel with native APIs only')
   click='Connect to Wwise';next_frame()
   toggle=true;next_frame()
   if mode=='unknown' then report='FILE:C:\\unlinked.wav;' end
@@ -59,5 +76,5 @@ local function scenario(mode)
   else assert(replaced==0 and converted==0,'Rejected case wrote audio: '..mode) end
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched'}) do scenario(mode) end
+for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity'}) do scenario(mode) end
 return total

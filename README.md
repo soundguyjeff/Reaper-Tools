@@ -1,6 +1,6 @@
 # Reaper Tools
 
-## Wwise Relay — v0.1.0 Windows test build
+## Wwise Relay — v0.1.1 Windows test build
 
 A small REAPER panel that follows completed renders, replaces explicitly linked **existing Wwise SFX audio**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -9,6 +9,10 @@ A small REAPER panel that follows completed renders, replaces explicitly linked 
 **[Download the ZIP with instructions](Wwise-Relay.zip)** · **[Windows check guide](docs/WINDOWS-CHECKS.md)**
 
 This is a first test build. Automated logic, simulated workflows and synthetic file tests do not establish live REAPER/NVK/Wwise compatibility. The remaining checks happen on your Windows machine. No connection to that machine is needed.
+
+### v0.1.1 fix
+
+Fixes the startup error `attempt to call a nil value (field 'GetProjectGUID')` using native REAPER functions. No additional extension is needed for the fix. Replace the previous Lua file and run it again.
 
 ### Install once
 
@@ -47,7 +51,7 @@ An unlinked render is skipped. A failure pauses further replacements and lists a
 - A manual edit to a WAV still named in the last render report can also look like a new render. Pause Relay while externally editing those files. Merely opening Relay or enabling it establishes a baseline and does not replay old renders.
 - Updates are sequential, not a batch transaction. Successful earlier files remain updated if a later one fails. Wwise/REAPER operations and large file hashing can briefly block the UI. Do not rename/reorganize the linked Wwise objects while a batch is updating.
 
-Settings stay locally in REAPER's extension settings, keyed to the REAPER project ID. The generated helper and short-lived requests live in REAPER's resource folder under `Data/WwiseRelay`. Temporary audio contains only the new rendered bytes and is removed after replacement; it is not a backup of the old WAV.
+Settings stay locally in REAPER's extension settings, keyed to the REAPER project’s master-track ID. The generated helper and short-lived requests live in REAPER's resource folder under `Data/WwiseRelay`. Temporary audio contains only the new rendered bytes and is removed after replacement; it is not a backup of the old WAV.
 
 ### Development
 
