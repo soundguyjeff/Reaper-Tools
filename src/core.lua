@@ -161,7 +161,7 @@ end
 
 -- After arming, the first signature is a baseline: never replay old renders.
 local Detector={};Detector.__index=Detector
-function M.detector() return setmetatable({seen={},pending={},ready_at=0},Detector) end
+function M.detector(quiet) return setmetatable({seen={},pending={},ready_at=0,quiet=quiet or 2},Detector) end
 function Detector:baseline(items)
   self.pending={}
   for _,v in ipairs(items) do self.seen[M.key(v.path)]=v.ok and v.stamp or false end
@@ -172,7 +172,7 @@ function Detector:observe(items,now)
     if v.ok and self.seen[k]==false then
       self.seen[k]=v.stamp -- Unreadable old report entry: first readable signature is a baseline.
     elseif v.ok and v.stamp~=self.seen[k] then
-      self.seen[k]=v.stamp;self.pending[k]=v;self.ready_at=now+2
+      self.seen[k]=v.stamp;self.pending[k]=v;self.ready_at=now+self.quiet
     end
   end
 end

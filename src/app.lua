@@ -36,7 +36,7 @@ end
 local fs=F.new(r,worker)
 local w=W.new(r,profile.port,fs)
 local s={startup_arm=true,enabled=false,status='Waiting for Wwise',detail='Relay connects automatically. Open Wwise with WAAPI enabled.',error=startup_error,
-  results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
+  results={},containers={},details=false,detector=C.detector(0.15),job=nil,next_probe=0,last_stats='',pending={},busy=false,
   tab='Setup',toast='',toast_until=0,selected_container=1,last_files={},
   auto_connect=true,next_connection=0,retry_delay=2,connection_status='Waiting for Wwise',connection_detail=''}
 local heartbeat_key='instance:'..project_guid
@@ -138,11 +138,11 @@ local function enable()
   assert(matched_project(w:project()),'Wrong Wwise project')
   local valid=false;for _,p in ipairs(w.platforms) do if p.id==profile.platform then valid=true end end
   assert(valid,'Select a valid conversion platform')
-  s.detector=C.detector()
+  s.detector=C.detector(0.15)
   s.last_stats=stats();s.last_files=C.render_files(s.last_stats)
   -- Baseline only paths in the old completed report. No manual links or folder watch.
   if #s.last_files>0 then s.detector:baseline(fs:inspect(s.last_files)) end
-  s.pending={};s.job=nil;s.enabled=true;s.error=nil;s.status='Waiting for render';s.detail='Render through NVK as usual.';s.next_probe=r.time_precise()+1.5;save()
+  s.pending={};s.job=nil;s.enabled=true;s.error=nil;s.status='Waiting for render';s.detail='Render through NVK as usual.';s.next_probe=r.time_precise()+0.3;save()
 end
 local function summary()
   local good,skipped,failed=0,0,0
@@ -225,7 +225,7 @@ local function tick()
     if ready then begin_batch(ready);return end
   end
   if not s.job and time>=s.next_probe then
-    s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
+    s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+0.3;s.last_stats=report;s.last_files=files
   end
 end
 
