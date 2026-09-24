@@ -69,7 +69,7 @@ try {
   if($calls.Count -gt 10){throw 'Excessive Wwise round trips'}
   Write-Host "PASS $mode batch: $expected files, one import, one conversion, $($calls.Count) total calls, no explicit checkout/save"
  }
- $script:calls=@();$req.items[0].stamp='stale';$result=Invoke-NativeBatch $req
+ $script:mode='normal';$script:calls=@();$req.items[0].stamp='stale';$result=Invoke-NativeBatch $req
  if(@($calls | Where-Object {$_.uri -eq 'ak.wwise.core.audio.import'}).Count){throw 'Changed render reached import'}
  if(!$result.error){throw 'Stale batch must fail'}
  Write-Host 'PASS stale render prevents the entire native import'
