@@ -32,19 +32,19 @@ function Invoke-Waapi($call,[switch]$ExistingSourceRefresh,[switch]$ExistingBatc
  'ak.wwise.core.object.get' {
   $a=$call.args
   if($a.from.ofType){return @{data=@{return=@(@{id=$project;filePath=$req.projectPath})}}}
-  if($a.waql -like 'from type Sound*'){return @{data=@{return=$sounds}}}
+  if($a.waql -like 'from type Sound*'){return @{data=@{return=$script:sounds}}}
   if($a.waql -like 'from type AudioFileSource*'){
-   $owners=$sources;if($script:mode -eq 'shared'){$owners=$sources+@(@{id=(Id 999);originalWavFilePath=$sources[0].originalWavFilePath})}
+   $owners=$script:sources;if($script:mode -eq 'shared'){$owners=$script:sources+@(@{id=(Id 999);originalWavFilePath=$script:sources[0].originalWavFilePath})}
    return @{data=@{return=$owners}}
   }
-  $found=@($sounds+$sources | Where-Object {$_.id -in $a.from.id})
+  $found=@($script:sounds+$script:sources | Where-Object {$_.id -in $a.from.id})
   return @{data=@{return=$found}}
  }
  'ak.wwise.core.audio.import' {
   if(!$ExistingSourceRefresh -or $call.args.importOperation -ne 'useExisting' -or $call.args.autoAddToSourceControl -ne $false -or $call.args.autoCheckOutToSourceControl -ne $true){throw 'Incorrect native import flags'}
   $files=@();$objects=@()
   foreach($entry in $call.args.imports){
-   $source=@($sources | Where-Object {$_.id -eq $entry.importLocation})
+   $source=@($script:sources | Where-Object {$_.id -eq $entry.importLocation})
    if($source.Count -ne 1 -or $entry.objectPath -ne '' -or $entry.importLanguage -ne 'SFX' -or [IO.Path]::GetFileName($entry.audioFile) -ne [IO.Path]::GetFileName($source[0].originalWavFilePath)){throw 'Import can create or redirect audio'}
    [IO.File]::Copy($entry.audioFile,$source[0].originalWavFilePath,$true)
    $files+=,$source[0].originalWavFilePath;$objects+=,@{id=$source[0].id}
@@ -53,7 +53,7 @@ function Invoke-Waapi($call,[switch]$ExistingSourceRefresh,[switch]$ExistingBatc
  }
  'ak.wwise.core.audio.convert' {
   if(!$ExistingBatch -or $call.args.platforms[0] -ne $platform -or $call.args.languages[0] -ne 'SFX'){throw 'Unscoped conversion'}
-  foreach($s in $sources){Wem $s.convertedWemFilePath}
+  foreach($s in $script:sources){Wem $s.convertedWemFilePath}
   return @{data=@{errors=@()}}
  }
  default {throw 'Unexpected or checkout/save command: '+$call.uri}
