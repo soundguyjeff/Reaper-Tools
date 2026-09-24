@@ -1,4 +1,4 @@
-local M = { VERSION = '0.2.0', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.1', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)

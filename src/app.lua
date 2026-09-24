@@ -46,6 +46,7 @@ r.SetExtState(C.SECTION,heartbeat_key,tostring(now),false)
 local function save() r.SetExtState(C.SECTION,key,C.json(profile),true) end
 local function toast(text) s.toast=text;s.toast_until=r.time_precise()+6 end
 local function pause(message)
+  fs:close_monitor()
   s.enabled=false;s.detector:cancel();s.pending={};s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
 end
 local function guard(fn)
@@ -87,6 +88,7 @@ local function platform_name()
   return profile.platform_name or 'Choose platform'
 end
 local function enable()
+  fs:close_monitor();s.inspect_failure=nil
   current_project();assert(win,'Live updates require Windows');assert(w.connected,'Connect to Wwise first')
   assert(profile.project_id,'Connect and choose Use this project in Setup first')
   assert(matched_project(w:project()),'Wrong Wwise project')
@@ -163,7 +165,7 @@ local function tick()
   if not s.enabled then return end
   current_project()
   local report=stats()
-  if report=='' then s.detector:cancel();s.last_stats='';s.last_files={};s.job=nil;return end
+  if report=='' then s.detector:cancel();s.last_stats='';s.last_files={};s.job=nil;s.inspect_failure=nil;fs:close_monitor();return end
   local files=C.render_files(report)
   if #files==0 then return end
   if s.job then
@@ -171,7 +173,21 @@ local function tick()
     if items then
       -- A cancelled or replaced render report invalidates an in-flight inspection.
       if report==s.job.report then
-        s.detector:observe(items,time)
+        local failures={}
+        for _,item in ipairs(items) do if not item.ok then failures[#failures+1]=item end end
+        if #failures>0 then
+          if not s.inspect_failure or s.inspect_failure.report~=report then s.inspect_failure={report=report,since=time} end
+          s.status='Checking rendered WAVs';s.detail='Waiting for readable, complete files: '..C.basename(failures[1].path)
+          if time-s.inspect_failure.since>=8 then
+            s.results={};s.containers={};s.tab='Latest render';s.details=true
+            for _,item in ipairs(items) do s.results[#s.results+1]={path=item.path,state=item.ok and 'Not processed' or 'File check failed',
+              message=item.ok and 'Another rendered file could not be read.' or (item.error or 'Cannot inspect WAV')} end
+            pause(failures[1].path..': '..(failures[1].error or 'Cannot inspect WAV'));s.job=nil;return
+          end
+        else
+          s.inspect_failure=nil;s.detector:observe(items,time)
+          if s.status=='Checking rendered WAVs' then s.status='Waiting for render';s.detail='Render through NVK as usual.' end
+        end
       end
       s.job=nil
     end
@@ -179,6 +195,7 @@ local function tick()
   if not s.job and time>=s.next_probe then
     s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
   end
+  if s.inspect_failure then return end
   local ready=s.detector:take(time)
   if ready then begin_batch(ready) end
 end
@@ -251,7 +268,7 @@ local function ui()
     I.BeginDisabled(ctx,s.busy or not win)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
-      if enabled then guard(enable) else s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
+      if enabled then guard(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)
     I.TextColored(ctx,muted,(w.connected and ('Connected · '..platform_name()) or 'Not connected')..'  |  v'..C.VERSION)
@@ -275,6 +292,7 @@ end
 local _,_,section,command=r.get_action_context()
 r.SetToggleCommandState(section,command,1);r.RefreshToolbar2(section,command)
 r.atexit(function()
+  fs:close_monitor()
   r.DeleteExtState(C.SECTION,heartbeat_key,false)
   r.SetToggleCommandState(section,command,0);r.RefreshToolbar2(section,command)
   -- Do not disconnect ReaWwise's shared connection or clear other scripts' JSON.

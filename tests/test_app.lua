@@ -26,10 +26,19 @@ local function scenario(mode)
   function w:verify() assert(mode~='identity_changed','Identity changed') end
   function w:convert() converted=converted+1;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
   function w:show() shown=shown+1;return true end
-  local fs={}
+  local fs={probes=0}
+  function fs:close_monitor()end
   function fs:inspect(paths) local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha='old'} end;return out end
   function fs:begin_inspect(paths) return {paths=paths} end
-  function fs:poll(job) local out=self:inspect(job.paths);for _,v in ipairs(out) do v.stamp='2:44' end;return out end
+  function fs:poll(job)
+    self.probes=self.probes+1
+    local out=self:inspect(job.paths)
+    for _,v in ipairs(out) do
+      v.stamp='2:44'
+      if mode=='inspection_failure' or (mode=='temporary_lock' and self.probes==1) then v.ok=false;v.error='WAV is locked or unreadable' end
+    end
+    return out
+  end
   function fs:replace() replaced=replaced+1;return {sha='new',stamp='2:44'} end
   function fs:artifact() assert(mode~='stale_artifact','Stale converted media');return true end
   package.loaded['relay.wwise']=nil;package.preload['relay.wwise']=function()return {new=function()return w end}end
@@ -77,11 +86,13 @@ local function scenario(mode)
   if mode=='competing_outputs' then report='FILE:C:\\one\\render.wav;FILE:C:\\two\\render.wav;' end
   if mode=='new_filename' then report='FILE:C:\\new.wav;' end
   if mode=='mixed' then report='FILE:C:\\render.wav;FILE:C:\\unknown.wav;' end
-  for _,t in ipairs({2,2.1,3.6,3.7,4.2,4.3,4.4,6}) do now=t;next_frame() end
+  for _,t in ipairs({2,2.1,3.6,3.7,4.2,4.3,4.4,6,8,10,12,14}) do now=t;next_frame() end
   local text=table.concat(messages,'\n')
-  if mode=='success' or mode=='legacy_profile' or mode=='new_filename' or mode=='fresh_setup' then
+  if mode=='success' or mode=='legacy_profile' or mode=='new_filename' or mode=='fresh_setup' or mode=='temporary_lock' then
     assert(replaced==1 and converted==1 and text:find('Wwise audio updated',1,true))
     click='Show in Wwise';next_frame();assert(shown==1,'Show must target successful container')
+  elseif mode=='inspection_failure' then
+    assert(replaced==0 and converted==0 and text:find('WAV is locked or unreadable',1,true) and text:find('Updates paused',1,true))
   elseif mode=='mixed' then
     assert(replaced==1 and converted==1 and text:find('1 skipped',1,true) and not text:find('Wwise audio updated',1,true))
   elseif mode=='conversion_failure' or mode=='stale_artifact' then
@@ -92,5 +103,5 @@ local function scenario(mode)
   assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup'}) do scenario(mode) end
+for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
 return total

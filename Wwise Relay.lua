@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.2.0
+-- @version 0.2.1
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaWwise and ReaImGui 0.9.3+.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- No Wwise objects are created, no audio is imported, no WAV backups are made.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.2.0', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.1', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -369,7 +369,10 @@ local function encoded(s)
   return table.concat(out)
 end
 M.encoded=encoded
-function M:command(request,response)
+local function literal(s) return "'"..s:gsub("'","''").."'" end
+local function exists(path) local f=io.open(path,'rb');if f then f:close();return true end;return false end
+local function write(path,data) local f=assert(io.open(path,'wb'));assert(f:write(data));f:close() end
+function M:command(request)
   assert(self.r.GetOS():match('Win'),'File updates require Windows')
   self.seq=self.seq+1
   local token=tostring(self.r.time_precise()):gsub('%D','')..'-'..self.seq
@@ -379,17 +382,12 @@ function M:command(request,response)
   f=assert(io.open(path,'wb'));assert(f:write(C.json(request)));f:close()
   local function quoted(s) assert(not s:find('["\r\n]'),'Invalid helper path');return '"'..s:gsub('/','\\')..'"' end
   local root=os.getenv('SystemRoot') or 'C:\\Windows'
-  local function literal(s) return "'"..s:gsub("'","''").."'" end
   local script='& ([scriptblock]::Create([IO.File]::ReadAllText('..literal(ps)..'))) -RequestFile '..literal(path)
-  if response then script='$result = '..script..'; [IO.File]::WriteAllText('..literal(response)..', [string]$result, [Text.UTF8Encoding]::new($false))' end
-  local command=quoted(root..'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')..' -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(script)
-  return command,path
+  local exe=root..'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  local args=' -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(script)
+  return quoted(exe)..args,path,exe,args
 end
-function M:run(request)
-  local command,path=self:command(request)
-  local output=self.r.ExecProcess(command,60000)
-  -- Only our own request file is removed. No WAV backups are made or removed.
-  os.remove(path)
+local function result(output)
   assert(output and output~='','Windows helper did not finish. Update status is uncertain; automatic updates have stopped.')
   local body=output:match('^[^\r\n]*[\r\n]+(.*)$') or ''
   body=body:gsub('^\239\187\191','')
@@ -398,20 +396,74 @@ function M:run(request)
   assert(data.ok,data.error or 'Windows file operation failed')
   return data
 end
+function M:run(request)
+  local command,path=self:command(request)
+  local output=self.r.ExecProcess(command,60000)
+  os.remove(path) -- Only our own JSON request; no WAV backups exist.
+  return result(output)
+end
+function M:close_monitor()
+  if not self.monitor then return end
+  -- This only stops the read-only inspector; it never interrupts an audio replacement.
+  local f=io.open(self.monitor.dir..'/stop','wb');if f then f:write('stop');f:close() end
+  self.monitor=nil
+end
+function M:start_monitor()
+  if self.monitor and not exists(self.monitor.dir..'/stopped.json') then return self.monitor end
+  self:close_monitor()
+  local token=self.r.genGuid(''):gsub('[^%x]','')
+  assert(#token==32,'Could not create a file-check session ID')
+  local dir=self.dir..'/monitor-'..token
+  self.r.RecursiveCreateDirectory(dir,0)
+  local _,request,exe,args=self:command({action='monitor',directory=dir})
+  -- REAPER's negative ExecProcess timeout may create a visible terminal before
+  -- PowerShell can hide itself. Launch once through its captured, synchronous path;
+  -- .NET creates the long-lived read-only child without a console in the first place.
+  local launch='$ErrorActionPreference="Stop"; try { '
+    ..'$si=[Diagnostics.ProcessStartInfo]::new(); $si.FileName='..literal(exe)..'; $si.Arguments='..literal(args)..'; '
+    ..'$si.UseShellExecute=$false; $si.CreateNoWindow=$true; $si.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden; '
+    ..'$si.RedirectStandardOutput=$true; $si.RedirectStandardError=$true; '
+    ..'$child=[Diagnostics.Process]::Start($si); @{ok=$true;pid=$child.Id}|ConvertTo-Json -Compress; $child.Dispose() '
+    ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'
+  local command='"'..exe..'" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(launch)
+  local ok,data=pcall(result,self.r.ExecProcess(command,10000))
+  if not ok then write(dir..'/stop','stop');error(data,0) end
+  self.monitor={dir=dir,request=request,pid=data.pid}
+  return self.monitor
+end
 function M:begin_inspect(paths)
-  local response=self.dir..'/response-'..tostring(self.r.time_precise()):gsub('%D','')..'.json'
-  local command,request=self:command({action='inspect',paths=C.array(paths),hash=false},response)
-  self.r.ExecProcess(command,-1)
-  return {response=response,request=request,start=self.r.time_precise()}
+  local monitor=self:start_monitor()
+  self.seq=self.seq+1;local id=tostring(self.seq)
+  local request=monitor.dir..'/inbox.json'
+  local temporary=monitor.dir..'/inbox.tmp'
+  assert(not exists(request),'File inspector already has a pending request')
+  write(temporary,C.json({id=id,paths=C.array(paths)}))
+  assert(os.rename(temporary,request),'Cannot submit the file inspection')
+  return {response=monitor.dir..'/response-'..id..'.json',monitor=monitor,paths=paths,start=self.r.time_precise()}
 end
 function M:poll(job)
+  if exists(job.monitor.dir..'/ready') then os.remove(job.monitor.request) end
   local f=io.open(job.response,'rb')
-  if not f then assert(self.r.time_precise()-job.start<30,'File inspection timed out; updates paused');return nil end
+  if not f then
+    local stopped=io.open(job.monitor.dir..'/stopped.json','rb')
+    if stopped then
+      local raw=stopped:read('*a');stopped:close()
+      local ok,data=pcall(C.decode,raw)
+      error(ok and data.error or 'File inspector stopped before returning a result',0)
+    end
+    assert(self.r.time_precise()-job.start<30,'Hidden file inspector did not respond. PowerShell may be blocked; updates paused.')
+    return nil
+  end
   local raw=f:read('*a');f:close()
   local ok,data=pcall(C.decode,raw)
-  if not ok then assert(self.r.time_precise()-job.start<30,'Invalid inspection response');return nil end
-  os.remove(job.response);os.remove(job.request)
+  assert(ok and type(data)=='table','File inspector returned an invalid response')
+  os.remove(job.response)
   assert(data.ok,data.error or 'Inspection failed')
+  assert(type(data.items)=='table' and #data.items==#job.paths,'File inspector returned an incomplete file list')
+  for i,item in ipairs(data.items) do
+    assert(C.key(item.path)==C.key(job.paths[i]),'File inspector returned a different path')
+    assert(not item.ok or type(item.stamp)=='string','File inspector returned no file timestamp')
+  end
   return data.items
 end
 function M:inspect(paths,hash)
@@ -435,7 +487,7 @@ package.preload['relay.worker'] = function() return [====[
 param([Parameter(Mandatory=$true)][string]$RequestFile)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 function SafePath([string]$p) {
   if (![System.IO.Path]::IsPathRooted($p) -or $p.StartsWith('\\') -or $p.StartsWith('\\?\')) { throw 'Only local absolute Windows paths are supported.' }
   if ($p.Contains(';') -or $p.Substring(2).Contains(':')) { throw 'Semicolons and alternate data streams are not supported.' }
@@ -493,9 +545,42 @@ function Inspect([string]$p,[bool]$hash=$false) {
     } finally { $stream.Dispose() }
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
+function Monitor([string]$directory) {
+  $dir=[IO.Path]::GetFullPath($directory)
+  if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw 'Missing file-check session directory.' }
+  $inbox=Join-Path $dir 'inbox.json';$stop=Join-Path $dir 'stop'
+  $reason='File inspector stopped after being idle; a new session will start on the next check.'
+  try {
+    [IO.File]::WriteAllText((Join-Path $dir 'ready'),'ready')
+    $idle=[DateTime]::UtcNow
+    while (!(Test-Path -LiteralPath $stop) -and ([DateTime]::UtcNow-$idle).TotalSeconds -lt 30) {
+      if (Test-Path -LiteralPath $inbox) {
+        $message=[IO.File]::ReadAllText($inbox,[Text.Encoding]::UTF8) | ConvertFrom-Json
+        if ([string]$message.id -notmatch '^[0-9]+$' -or !$message.paths -or $message.action) { throw 'Invalid read-only inspection request.' }
+        [IO.File]::Delete($inbox)
+        # Only inspect is available in the persistent worker. It cannot replace audio.
+        $items=@(foreach ($path in $message.paths) { Inspect $path $false })
+        $json=@{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
+        $temp=Join-Path $dir ('response-'+$message.id+'.tmp')
+        $dest=Join-Path $dir ('response-'+$message.id+'.json')
+        [IO.File]::WriteAllText($temp,$json,[Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($temp,$dest) # Publish a complete, unique response atomically.
+        $idle=[DateTime]::UtcNow
+      }
+      Start-Sleep -Milliseconds 100
+    }
+  } catch { $reason=$_.Exception.Message }
+  finally {
+    $json=@{error=$reason} | ConvertTo-Json -Compress
+    [IO.File]::WriteAllText((Join-Path $dir 'stopped.json'),$json,[Text.UTF8Encoding]::new($false))
+  }
+}
+
 try {
   $req=Get-Content -LiteralPath $RequestFile -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($req.action -eq 'inspect') {
+  if ($req.action -eq 'monitor') {
+    Monitor $req.directory
+  } elseif ($req.action -eq 'inspect') {
     $items=@(foreach ($p in $req.paths) { Inspect $p ([bool]$req.hash) })
     @{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
   } elseif ($req.action -eq 'artifact') {
@@ -586,6 +671,7 @@ r.SetExtState(C.SECTION,heartbeat_key,tostring(now),false)
 local function save() r.SetExtState(C.SECTION,key,C.json(profile),true) end
 local function toast(text) s.toast=text;s.toast_until=r.time_precise()+6 end
 local function pause(message)
+  fs:close_monitor()
   s.enabled=false;s.detector:cancel();s.pending={};s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
 end
 local function guard(fn)
@@ -627,6 +713,7 @@ local function platform_name()
   return profile.platform_name or 'Choose platform'
 end
 local function enable()
+  fs:close_monitor();s.inspect_failure=nil
   current_project();assert(win,'Live updates require Windows');assert(w.connected,'Connect to Wwise first')
   assert(profile.project_id,'Connect and choose Use this project in Setup first')
   assert(matched_project(w:project()),'Wrong Wwise project')
@@ -703,7 +790,7 @@ local function tick()
   if not s.enabled then return end
   current_project()
   local report=stats()
-  if report=='' then s.detector:cancel();s.last_stats='';s.last_files={};s.job=nil;return end
+  if report=='' then s.detector:cancel();s.last_stats='';s.last_files={};s.job=nil;s.inspect_failure=nil;fs:close_monitor();return end
   local files=C.render_files(report)
   if #files==0 then return end
   if s.job then
@@ -711,7 +798,21 @@ local function tick()
     if items then
       -- A cancelled or replaced render report invalidates an in-flight inspection.
       if report==s.job.report then
-        s.detector:observe(items,time)
+        local failures={}
+        for _,item in ipairs(items) do if not item.ok then failures[#failures+1]=item end end
+        if #failures>0 then
+          if not s.inspect_failure or s.inspect_failure.report~=report then s.inspect_failure={report=report,since=time} end
+          s.status='Checking rendered WAVs';s.detail='Waiting for readable, complete files: '..C.basename(failures[1].path)
+          if time-s.inspect_failure.since>=8 then
+            s.results={};s.containers={};s.tab='Latest render';s.details=true
+            for _,item in ipairs(items) do s.results[#s.results+1]={path=item.path,state=item.ok and 'Not processed' or 'File check failed',
+              message=item.ok and 'Another rendered file could not be read.' or (item.error or 'Cannot inspect WAV')} end
+            pause(failures[1].path..': '..(failures[1].error or 'Cannot inspect WAV'));s.job=nil;return
+          end
+        else
+          s.inspect_failure=nil;s.detector:observe(items,time)
+          if s.status=='Checking rendered WAVs' then s.status='Waiting for render';s.detail='Render through NVK as usual.' end
+        end
       end
       s.job=nil
     end
@@ -719,6 +820,7 @@ local function tick()
   if not s.job and time>=s.next_probe then
     s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
   end
+  if s.inspect_failure then return end
   local ready=s.detector:take(time)
   if ready then begin_batch(ready) end
 end
@@ -791,7 +893,7 @@ local function ui()
     I.BeginDisabled(ctx,s.busy or not win)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
-      if enabled then guard(enable) else s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
+      if enabled then guard(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)
     I.TextColored(ctx,muted,(w.connected and ('Connected · '..platform_name()) or 'Not connected')..'  |  v'..C.VERSION)
@@ -815,6 +917,7 @@ end
 local _,_,section,command=r.get_action_context()
 r.SetToggleCommandState(section,command,1);r.RefreshToolbar2(section,command)
 r.atexit(function()
+  fs:close_monitor()
   r.DeleteExtState(C.SECTION,heartbeat_key,false)
   r.SetToggleCommandState(section,command,0);r.RefreshToolbar2(section,command)
   -- Do not disconnect ReaWwise's shared connection or clear other scripts' JSON.

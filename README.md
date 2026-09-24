@@ -1,6 +1,6 @@
 # Reaper Tools
 
-## Wwise Relay — v0.2.0 Windows test build
+## Wwise Relay — v0.2.1 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -20,7 +20,13 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
 
-### v0.2.0 — automatic matching
+### v0.2.1 — quiet file checks
+
+Replaces the repeating PowerShell launches with one background inspector created without a console window. Failed WAV checks now show the filename and actual error, then pause after an eight-second grace period for files still being written. The inspector stops when Relay is paused/closed and expires after being idle; it starts again when needed. It is read-only: audio replacement still runs through the existing verified replacement operation.
+
+The recording of the v0.2.0 failure established the repeating console-window problem. It did not reveal the underlying WAV inspection error; the new file-error display makes that visible instead of leaving the panel silently waiting.
+
+### Automatic matching
 
 No manual audio links are needed. `Explosion_01.wav` automatically targets the existing Wwise Sound named `Explosion_01`. Choose the Wwise project and conversion platform once, enable updates, and render. This version also includes the v0.1.1 startup fix for REAPER 7.78 Win64.
 
@@ -64,7 +70,7 @@ An unmatched or ambiguous render is skipped. A failure pauses further replacemen
 - A manual edit to a WAV still named in the last render report can also look like a new render. Pause Relay while externally editing those files. Merely opening Relay or enabling it establishes a baseline and does not replay old renders.
 - Updates are sequential, not a batch transaction. Successful earlier files remain updated if a later one fails. Wwise/REAPER operations and large file hashing can briefly block the UI. Do not rename/reorganize the matched Wwise objects while a batch is updating.
 
-Settings stay locally in REAPER's extension settings, keyed to the REAPER project’s master-track ID. The generated helper and short-lived requests live in REAPER's resource folder under `Data/WwiseRelay`. Temporary audio contains only the new rendered bytes and is removed after replacement; it is not a backup of the old WAV.
+Settings stay locally in REAPER's extension settings, keyed to the REAPER project’s master-track ID. The generated helper and local inspection-session files live in REAPER's resource folder under `Data/WwiseRelay`. Temporary audio contains only the new rendered bytes and is removed after replacement; it is not a backup of the old WAV.
 
 ### Development
 

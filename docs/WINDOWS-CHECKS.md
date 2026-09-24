@@ -6,7 +6,7 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 
 1. **Open:** Load the script and confirm the compact panel opens without an error. Connect to Wwise 2024.1.1, pin the project and choose the correct platform.
 2. **Name:** Give the rendered WAV the same name as the existing Wwise Sound (for example, `Explosion_01.wav` and `Explosion_01`). Do not set up a link or select the sound in Wwise. Merely connecting/enabling must not change the original audio.
-3. **Enable:** Turn on Update after render. Old renders must not be sent immediately.
+3. **Enable:** Turn on Update after render. Old renders must not be sent immediately. No PowerShell or terminal window should appear during file checks. The inspector is reused, and stops when Relay is paused or closed.
 4. **Render:** Make an obvious audible change and render through your usual NVK action. Confirm Show file results lists the intended Wwise Sound path. After the render finishes, expect “1 replaced + converted” and “Wwise audio updated.” Check the result in Wwise, then through your existing remote game connection.
 5. **Locate:** Click Show in Wwise. The sound's immediate parent container should be selected. Repeat with outputs from two containers and check the container selector.
 6. **Repeat:** Render the same filename again, including a same-duration change. Confirm another update occurs. Also try an unchanged render: an already-current converted cache should be accepted.
@@ -19,6 +19,8 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 
 13. **Duplicate names:** In a disposable project, give two existing Sounds the same name in different containers. Render that filename. Expect Skipped with an ambiguity message, and neither original replaced. Also check that two render outputs with the same stem from different folders in one reported batch are both skipped.
 14. **No saved links:** Render a second, never-before-used filename that matches another existing unique Sound. It should be found automatically without setup.
+
+15. **Inspection errors:** In a disposable test, leave a reported WAV missing/unreadable/incomplete. After roughly eight seconds of failed checks, expect the exact filename and error in Relay, with updates paused. A briefly locked file that becomes readable within that interval should proceed normally.
 
 If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versions, and whether it was a single render or multiple NVK groups. You can redact project names and paths; audio/project files are not needed to report a problem.
 

@@ -18,7 +18,10 @@ local function encoded(s)
   return table.concat(out)
 end
 M.encoded=encoded
-function M:command(request,response)
+local function literal(s) return "'"..s:gsub("'","''").."'" end
+local function exists(path) local f=io.open(path,'rb');if f then f:close();return true end;return false end
+local function write(path,data) local f=assert(io.open(path,'wb'));assert(f:write(data));f:close() end
+function M:command(request)
   assert(self.r.GetOS():match('Win'),'File updates require Windows')
   self.seq=self.seq+1
   local token=tostring(self.r.time_precise()):gsub('%D','')..'-'..self.seq
@@ -28,17 +31,12 @@ function M:command(request,response)
   f=assert(io.open(path,'wb'));assert(f:write(C.json(request)));f:close()
   local function quoted(s) assert(not s:find('["\r\n]'),'Invalid helper path');return '"'..s:gsub('/','\\')..'"' end
   local root=os.getenv('SystemRoot') or 'C:\\Windows'
-  local function literal(s) return "'"..s:gsub("'","''").."'" end
   local script='& ([scriptblock]::Create([IO.File]::ReadAllText('..literal(ps)..'))) -RequestFile '..literal(path)
-  if response then script='$result = '..script..'; [IO.File]::WriteAllText('..literal(response)..', [string]$result, [Text.UTF8Encoding]::new($false))' end
-  local command=quoted(root..'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')..' -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(script)
-  return command,path
+  local exe=root..'\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+  local args=' -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(script)
+  return quoted(exe)..args,path,exe,args
 end
-function M:run(request)
-  local command,path=self:command(request)
-  local output=self.r.ExecProcess(command,60000)
-  -- Only our own request file is removed. No WAV backups are made or removed.
-  os.remove(path)
+local function result(output)
   assert(output and output~='','Windows helper did not finish. Update status is uncertain; automatic updates have stopped.')
   local body=output:match('^[^\r\n]*[\r\n]+(.*)$') or ''
   body=body:gsub('^\239\187\191','')
@@ -47,20 +45,74 @@ function M:run(request)
   assert(data.ok,data.error or 'Windows file operation failed')
   return data
 end
+function M:run(request)
+  local command,path=self:command(request)
+  local output=self.r.ExecProcess(command,60000)
+  os.remove(path) -- Only our own JSON request; no WAV backups exist.
+  return result(output)
+end
+function M:close_monitor()
+  if not self.monitor then return end
+  -- This only stops the read-only inspector; it never interrupts an audio replacement.
+  local f=io.open(self.monitor.dir..'/stop','wb');if f then f:write('stop');f:close() end
+  self.monitor=nil
+end
+function M:start_monitor()
+  if self.monitor and not exists(self.monitor.dir..'/stopped.json') then return self.monitor end
+  self:close_monitor()
+  local token=self.r.genGuid(''):gsub('[^%x]','')
+  assert(#token==32,'Could not create a file-check session ID')
+  local dir=self.dir..'/monitor-'..token
+  self.r.RecursiveCreateDirectory(dir,0)
+  local _,request,exe,args=self:command({action='monitor',directory=dir})
+  -- REAPER's negative ExecProcess timeout may create a visible terminal before
+  -- PowerShell can hide itself. Launch once through its captured, synchronous path;
+  -- .NET creates the long-lived read-only child without a console in the first place.
+  local launch='$ErrorActionPreference="Stop"; try { '
+    ..'$si=[Diagnostics.ProcessStartInfo]::new(); $si.FileName='..literal(exe)..'; $si.Arguments='..literal(args)..'; '
+    ..'$si.UseShellExecute=$false; $si.CreateNoWindow=$true; $si.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden; '
+    ..'$si.RedirectStandardOutput=$true; $si.RedirectStandardError=$true; '
+    ..'$child=[Diagnostics.Process]::Start($si); @{ok=$true;pid=$child.Id}|ConvertTo-Json -Compress; $child.Dispose() '
+    ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'
+  local command='"'..exe..'" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(launch)
+  local ok,data=pcall(result,self.r.ExecProcess(command,10000))
+  if not ok then write(dir..'/stop','stop');error(data,0) end
+  self.monitor={dir=dir,request=request,pid=data.pid}
+  return self.monitor
+end
 function M:begin_inspect(paths)
-  local response=self.dir..'/response-'..tostring(self.r.time_precise()):gsub('%D','')..'.json'
-  local command,request=self:command({action='inspect',paths=C.array(paths),hash=false},response)
-  self.r.ExecProcess(command,-1)
-  return {response=response,request=request,start=self.r.time_precise()}
+  local monitor=self:start_monitor()
+  self.seq=self.seq+1;local id=tostring(self.seq)
+  local request=monitor.dir..'/inbox.json'
+  local temporary=monitor.dir..'/inbox.tmp'
+  assert(not exists(request),'File inspector already has a pending request')
+  write(temporary,C.json({id=id,paths=C.array(paths)}))
+  assert(os.rename(temporary,request),'Cannot submit the file inspection')
+  return {response=monitor.dir..'/response-'..id..'.json',monitor=monitor,paths=paths,start=self.r.time_precise()}
 end
 function M:poll(job)
+  if exists(job.monitor.dir..'/ready') then os.remove(job.monitor.request) end
   local f=io.open(job.response,'rb')
-  if not f then assert(self.r.time_precise()-job.start<30,'File inspection timed out; updates paused');return nil end
+  if not f then
+    local stopped=io.open(job.monitor.dir..'/stopped.json','rb')
+    if stopped then
+      local raw=stopped:read('*a');stopped:close()
+      local ok,data=pcall(C.decode,raw)
+      error(ok and data.error or 'File inspector stopped before returning a result',0)
+    end
+    assert(self.r.time_precise()-job.start<30,'Hidden file inspector did not respond. PowerShell may be blocked; updates paused.')
+    return nil
+  end
   local raw=f:read('*a');f:close()
   local ok,data=pcall(C.decode,raw)
-  if not ok then assert(self.r.time_precise()-job.start<30,'Invalid inspection response');return nil end
-  os.remove(job.response);os.remove(job.request)
+  assert(ok and type(data)=='table','File inspector returned an invalid response')
+  os.remove(job.response)
   assert(data.ok,data.error or 'Inspection failed')
+  assert(type(data.items)=='table' and #data.items==#job.paths,'File inspector returned an incomplete file list')
+  for i,item in ipairs(data.items) do
+    assert(C.key(item.path)==C.key(job.paths[i]),'File inspector returned a different path')
+    assert(not item.ok or type(item.stamp)=='string','File inspector returned no file timestamp')
+  end
   return data.items
 end
 function M:inspect(paths,hash)

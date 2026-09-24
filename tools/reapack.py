@@ -42,6 +42,7 @@ def main():
         ET.SubElement(release,'source',main='main',platform='win64',hash=digest).text=url
         changes={
             '0.1.1':'Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.',
+            '0.2.1':'Fix repeating PowerShell windows: reuse one read-only inspector created without a console. Surface failed WAV inspection details and pause instead of silently retrying forever.',
             '0.2.0':'Automatically match rendered WAV filenames to unique existing Wwise Sound names. Remove manual audio links. Skip missing, ambiguous, shared or competing targets. Keep project and platform preferences.'}
         ET.SubElement(release,'changelog').text=changes.get(version,'Updated Wwise Relay. See repository history for changes.')
     ET.indent(root,space='  ')

@@ -1,7 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$RequestFile)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
 function SafePath([string]$p) {
   if (![System.IO.Path]::IsPathRooted($p) -or $p.StartsWith('\\') -or $p.StartsWith('\\?\')) { throw 'Only local absolute Windows paths are supported.' }
   if ($p.Contains(';') -or $p.Substring(2).Contains(':')) { throw 'Semicolons and alternate data streams are not supported.' }
@@ -59,9 +59,42 @@ function Inspect([string]$p,[bool]$hash=$false) {
     } finally { $stream.Dispose() }
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
+function Monitor([string]$directory) {
+  $dir=[IO.Path]::GetFullPath($directory)
+  if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw 'Missing file-check session directory.' }
+  $inbox=Join-Path $dir 'inbox.json';$stop=Join-Path $dir 'stop'
+  $reason='File inspector stopped after being idle; a new session will start on the next check.'
+  try {
+    [IO.File]::WriteAllText((Join-Path $dir 'ready'),'ready')
+    $idle=[DateTime]::UtcNow
+    while (!(Test-Path -LiteralPath $stop) -and ([DateTime]::UtcNow-$idle).TotalSeconds -lt 30) {
+      if (Test-Path -LiteralPath $inbox) {
+        $message=[IO.File]::ReadAllText($inbox,[Text.Encoding]::UTF8) | ConvertFrom-Json
+        if ([string]$message.id -notmatch '^[0-9]+$' -or !$message.paths -or $message.action) { throw 'Invalid read-only inspection request.' }
+        [IO.File]::Delete($inbox)
+        # Only inspect is available in the persistent worker. It cannot replace audio.
+        $items=@(foreach ($path in $message.paths) { Inspect $path $false })
+        $json=@{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
+        $temp=Join-Path $dir ('response-'+$message.id+'.tmp')
+        $dest=Join-Path $dir ('response-'+$message.id+'.json')
+        [IO.File]::WriteAllText($temp,$json,[Text.UTF8Encoding]::new($false))
+        [IO.File]::Move($temp,$dest) # Publish a complete, unique response atomically.
+        $idle=[DateTime]::UtcNow
+      }
+      Start-Sleep -Milliseconds 100
+    }
+  } catch { $reason=$_.Exception.Message }
+  finally {
+    $json=@{error=$reason} | ConvertTo-Json -Compress
+    [IO.File]::WriteAllText((Join-Path $dir 'stopped.json'),$json,[Text.UTF8Encoding]::new($false))
+  }
+}
+
 try {
   $req=Get-Content -LiteralPath $RequestFile -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($req.action -eq 'inspect') {
+  if ($req.action -eq 'monitor') {
+    Monitor $req.directory
+  } elseif ($req.action -eq 'inspect') {
     $items=@(foreach ($p in $req.paths) { Inspect $p ([bool]$req.hash) })
     @{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
   } elseif ($req.action -eq 'artifact') {
