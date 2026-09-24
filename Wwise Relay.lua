@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.2.1
+-- @version 0.2.2
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaWwise and ReaImGui 0.9.3+.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- No Wwise objects are created, no audio is imported, no WAV backups are made.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.2.1', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.2', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -416,17 +416,50 @@ function M:start_monitor()
   local dir=self.dir..'/monitor-'..token
   self.r.RecursiveCreateDirectory(dir,0)
   local _,request,exe,args=self:command({action='monitor',directory=dir})
-  -- REAPER's negative ExecProcess timeout may create a visible terminal before
-  -- PowerShell can hide itself. Launch once through its captured, synchronous path;
-  -- .NET creates the long-lived read-only child without a console in the first place.
-  local launch='$ErrorActionPreference="Stop"; try { '
-    ..'$si=[Diagnostics.ProcessStartInfo]::new(); $si.FileName='..literal(exe)..'; $si.Arguments='..literal(args)..'; '
-    ..'$si.UseShellExecute=$false; $si.CreateNoWindow=$true; $si.WindowStyle=[Diagnostics.ProcessWindowStyle]::Hidden; '
-    ..'$si.RedirectStandardOutput=$true; $si.RedirectStandardError=$true; '
-    ..'$child=[Diagnostics.Process]::Start($si); @{ok=$true;pid=$child.Id}|ConvertTo-Json -Compress; $child.Dispose() '
+  -- REAPER captures this short launcher. The inspector must inherit NO handles:
+  -- .NET Framework Process.Start can retain the capture pipe until the child exits.
+  -- CreateProcessW also suppresses the console at creation, before PowerShell runs.
+  local native=[==[
+using System;
+using System.Text;
+using System.Runtime.InteropServices;
+public static class RelayLauncher {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+  struct StartupInfo {
+    public uint cb;
+    public string reserved, desktop, title;
+    public uint x, y, xSize, ySize, xCountChars, yCountChars, fillAttribute, flags;
+    public ushort showWindow, reservedSize;
+    public IntPtr reservedBytes, stdin, stdout, stderr;
+  }
+  [StructLayout(LayoutKind.Sequential)]
+  struct ProcessInfo { public IntPtr process, thread; public uint processId, threadId; }
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true, ExactSpelling=true)]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  static extern bool CreateProcessW(string application, StringBuilder command,
+    IntPtr processAttributes, IntPtr threadAttributes,
+    [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint flags,
+    IntPtr environment, string directory, ref StartupInfo startup, out ProcessInfo process);
+  [DllImport("kernel32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  static extern bool CloseHandle(IntPtr handle);
+  public static uint Start(string exe, string arguments) {
+    StartupInfo si = new StartupInfo(); si.cb = (uint)Marshal.SizeOf(typeof(StartupInfo));
+    ProcessInfo pi;
+    if (!CreateProcessW(exe, new StringBuilder("\"" + exe + "\"" + arguments),
+      IntPtr.Zero, IntPtr.Zero, false, 0x08000000, IntPtr.Zero, null, ref si, out pi))
+      throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    try { return pi.processId; }
+    finally { CloseHandle(pi.thread); CloseHandle(pi.process); }
+  }
+}
+]==]
+  local launch='$ErrorActionPreference="Stop"; try { Add-Type -TypeDefinition '..literal(native)..'; '
+    ..'$exe='..literal(exe)..'; $arguments='..literal(args)..'; '
+    ..'$childId=[RelayLauncher]::Start($exe,$arguments); @{ok=$true;pid=$childId}|ConvertTo-Json -Compress '
     ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'
   local command='"'..exe..'" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(launch)
-  local ok,data=pcall(result,self.r.ExecProcess(command,10000))
+  local ok,data=pcall(function() return result(self.r.ExecProcess(command,10000)) end)
   if not ok then write(dir..'/stop','stop');error(data,0) end
   self.monitor={dir=dir,request=request,pid=data.pid}
   return self.monitor

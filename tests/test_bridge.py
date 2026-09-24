@@ -20,14 +20,21 @@ def execute(command,timeout):
     encoded=command.rsplit(' -EncodedCommand ',1)[1]
     script=base64.b64decode(encoded).decode('utf-16le')
     launches.append(script)
-    if '$si.' in script:
-        assert '$si.CreateNoWindow=$true' in script and '$si.UseShellExecute=$false' in script
-        assert '$si.RedirectStandardOutput=$true' in script, 'Child must not inherit the REAPER capture pipe'
+    if '[RelayLauncher]::Start' in script:
+        assert 'IntPtr.Zero, IntPtr.Zero, false, 0x08000000' in script
+        assert 'CloseHandle(pi.thread); CloseHandle(pi.process)' in script
     if windows:
         run=command
     else:
-        script=re.sub(r"\$si.FileName='[^']*'",lambda _:"$si.FileName='"+str(ps).replace("'","''")+"'",script)
+        # Compile the production native declaration but replace its invocation only.
+        # This checks the protocol on macOS, NOT the Windows CreateProcess behavior.
+        script=re.sub(r"\$exe='[^']*'",lambda _:"$exe='"+str(ps).replace("'","''")+"'",script)
         script=script.replace(' -WindowStyle Hidden','')
+        script=script.replace('$childId=[RelayLauncher]::Start($exe,$arguments)',
+            '$si=[Diagnostics.ProcessStartInfo]::new(); $si.FileName=$exe; $si.Arguments=$arguments; '
+            '$si.UseShellExecute=$false; $si.CreateNoWindow=$true; '
+            '$si.RedirectStandardOutput=$true; $si.RedirectStandardError=$true; '
+            '$child=[Diagnostics.Process]::Start($si); $childId=$child.Id; $child.Dispose()')
         run=[ps,'-NoLogo','-NoProfile','-NonInteractive','-EncodedCommand',base64.b64encode(script.encode('utf-16le')).decode()]
     proc=subprocess.run(run,capture_output=True,timeout=timeout/1000,
         creationflags=subprocess.CREATE_NO_WINDOW if windows else 0)
