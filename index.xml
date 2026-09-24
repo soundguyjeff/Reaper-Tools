@@ -46,6 +46,10 @@
         <source main="main" platform="win64" hash="1220a3318c15f22421bda89d6b3f8aab6f75c540214ceb28b05a8033a40e1afcadd5">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/52c26249f69299f343abb49bee236d968d898eda/Wwise%20Relay.lua</source>
         <changelog>Support local directory junctions and symbolic links such as C:\Phobos. Resolve and pin real file locations, reject retargeted folders and same-file aliases, and retain existing-source and file-replacement checks.</changelog>
       </version>
+      <version name="0.3.4" author="Reaper Tools" time="2026-09-24T15:55:11-05:00">
+        <source main="main" platform="win64" hash="12203984df8ee931ce1bd5536100c2a902ff8cde4912cb3bd1766bf7c826118828f8">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/7e55c855e59da5413d57895ea66f734c6e131cfc/Wwise%20Relay.lua</source>
+        <changelog>Automatically request Wwise source-control checkout for the single matched read-only WAV. Verify it becomes writable and unchanged before replacement. Arm Update after render on startup for a verified saved project, without replaying old renders or resuming after errors.</changelog>
+      </version>
     </reapack>
   </category>
   <category name="Jeff">

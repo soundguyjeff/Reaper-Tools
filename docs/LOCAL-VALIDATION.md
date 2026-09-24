@@ -1,5 +1,7 @@
 # Wwise Relay v0.3.4
 
+[Windows validation passed](https://github.com/soundguyjeff/Reaper-Tools/actions/runs/36058091403): Lua, simulated panel, real asynchronous bridge, 37 file checks, and 5 scoped checkout mock cases on Windows PowerShell 5.1.
+
 Local tests: 46 core, 16 resolver, 6 conversion, 30 simulated panel workflows and 5 scoped checkout cases passed. Checkout mocks cover success, wrong project, shared original, still-read-only and changed audio. The real Wwise 2024.1.1 command inventory includes SourceControlCheckoutWAV. A real Perforce/source-control server is not available here; provider login, permissions and locks must be verified in the user environment.
 
 # Wwise Relay v0.3.3 validation
