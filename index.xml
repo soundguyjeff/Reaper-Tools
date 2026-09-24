@@ -54,6 +54,10 @@
         <source main="main" platform="win64" hash="1220f31faf310258856d24951c22bc3aa523110c0d076c835ac38d5f2eeb40782c68">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/18ab91b2100e0d7d4f2f2200fb7c629b28982d1e/Wwise%20Relay.lua</source>
         <changelog>Batch exact-name matching, native Wwise import and conversion for up to 128 rendered WAVs. Remove serial checkout/copy operations and repeated per-file project searches. Preserve original filenames and source identities, verify original bytes and converted media, and reduce render detection delay. Wwise handles required Perforce WAV access; Relay does not save or explicitly check out WWUs.</changelog>
       </version>
+      <version name="0.3.6" author="Reaper Tools" time="2026-09-24T16:22:42-05:00">
+        <source main="main" platform="win64" hash="12203e174c4cddcde67e48796a48917ff498d26ce9ab58eddcc34f92b1a2c15fd194">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/7f30cecba9f93974162f31a683592585ec2d1179/Wwise%20Relay.lua</source>
+        <changelog>Use Wwise text search before exact Sound-name/type checks to avoid a type-wide Sound scan. Keep duplicate-name and shared-original guards; fall back safely for names without a searchable substring. Show separate matching and shared-WAV-check timings.</changelog>
+      </version>
     </reapack>
   </category>
   <category name="Jeff">
