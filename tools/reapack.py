@@ -42,6 +42,7 @@ def main():
         ET.SubElement(release,'source',main='main',platform='win64',hash=digest).text=url
         changes={
             '0.1.1':'Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.',
+            '0.2.4':'Allow Windows Cloud Files markers in render/original paths while still rejecting actual symbolic links, junctions and unknown reparse tags. Report the exact unsupported path component.',
             '0.2.3':'Suppress Windows PowerShell first-use progress output in the hidden launcher. Includes persistent console-free file inspection and visible WAV errors.',
             '0.2.2':'Fix the Windows inspector startup hang by launching without inherited handles. Retain quiet persistent inspection and visible WAV errors.',
             '0.2.1':'Fix repeating PowerShell windows: reuse one read-only inspector created without a console. Surface failed WAV inspection details and pause instead of silently retrying forever.',

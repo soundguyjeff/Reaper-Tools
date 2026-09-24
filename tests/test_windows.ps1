@@ -61,6 +61,34 @@ try {
   Check ($out.ok -and $out.length -gt 0 -and $out.ticks) 'Converted-artifact metadata can be read'
   $unicode=Join-Path $root '火.wav';Wave $unicode 12;$a=Call @{action='inspect';paths=@($unicode)}
   Check ($a.items[0].ok) 'Unicode filenames work'
+  # Test the production tag classifier without needing a Dropbox account/provider.
+  $ast=[System.Management.Automation.Language.Parser]::ParseFile($worker,[ref]$null,[ref]$null)
+  foreach ($name in @('Check-ReparseTag','Get-ReparseTag')) {
+    $fn=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
+    . ([scriptblock]::Create($fn.Extent.Text))
+  }
+  foreach ($variant in 0..15) { Check-ReparseTag ([uint32](2415919130 + $variant*4096)) 'cloud folder' }
+  Check $true 'All documented Windows Cloud Files tag variants are allowed'
+  foreach ($tag in @([uint32]2684354563,[uint32]2684354572,[uint32]2684354589,[uint32]2147483649,[uint32]0)) {
+    $rejected=$false
+    try { Check-ReparseTag $tag 'exact component' } catch { $rejected=$_.Exception.Message.Contains('exact component') }
+    Check $rejected ('Redirecting or unknown tag 0x{0:X8} is rejected with its location' -f $tag)
+  }
+  if ($env:OS -eq 'Windows_NT') {
+    $target=Join-Path $root 'target';[IO.Directory]::CreateDirectory($target) | Out-Null
+    $targetWav=Join-Path $target 'audio.wav';Wave $targetWav 15;$originalHash=Sha $targetWav
+    $junction=Join-Path $root 'junction'
+    New-Item -ItemType Junction -Path $junction -Target $target | Out-Null
+    try {
+      Check ((Get-ReparseTag $junction) -eq [uint32]2684354563) 'Native Windows tag lookup identifies a real junction'
+      $viaLink=Join-Path $junction 'audio.wav'
+      $a=Call @{action='inspect';paths=@($viaLink)}
+      Check (!$a.items[0].ok -and $a.items[0].error.Contains($junction)) 'Render through a junction is rejected and identifies the parent'
+      Wave $src 18;$a=Call @{action='inspect';paths=@($src)}
+      $out=Call @{action='replace';source=$src;destination=$viaLink;stamp=$a.items[0].stamp;destinationSha=$originalHash}
+      Check (!$out.ok -and (Sha $targetWav) -eq $originalHash) 'Original through a junction is rejected without modifying target audio'
+    } finally { [IO.Directory]::Delete($junction) }
+  }
   Write-Host "Passed $count Windows file-safety tests."
 } finally {
   # This entire directory is owned by this test and contains synthetic audio only.

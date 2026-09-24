@@ -22,6 +22,8 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 
 15. **Inspection errors:** In a disposable test, leave a reported WAV missing/unreadable/incomplete. After roughly eight seconds of failed checks, expect the exact filename and error in Relay, with updates paused. A briefly locked file that becomes readable within that interval should proceed normally.
 
+16. **Dropbox/cloud paths:** With a rendered WAV available offline in your normal Dropbox folder, confirm it can be inspected and updated. If a path is still rejected, the message should identify the exact link or show an unsupported marker code. Automated tests cover the cloud-tag classifier and real Windows junctions; they do not run Dropbox itself.
+
 If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versions, and whether it was a single render or multiple NVK groups. You can redact project names and paths; audio/project files are not needed to report a problem.
 
 Do not treat a successful panel notification as proof that the game played the new media: verify that once through the remote connection. Relay stops at the Wwise conversion boundary by design.

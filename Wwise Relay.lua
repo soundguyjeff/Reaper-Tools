@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.2.3
+-- @version 0.2.4
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaWwise and ReaImGui 0.9.3+.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- No Wwise objects are created, no audio is imported, no WAV backups are made.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.2.3', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.2.4', SECTION = 'WwiseRelay' }
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -521,6 +521,49 @@ param([Parameter(Mandatory=$true)][string]$RequestFile)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
+function Get-ReparseTag([string]$path) {
+  if ($env:OS -ne 'Windows_NT') { throw "Symlinks and junctions are not supported: $path" }
+  if (!('RelayPathInfo' -as [type])) {
+    Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class RelayPathInfo {
+  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
+  struct FindData {
+    public uint attributes;
+    public System.Runtime.InteropServices.ComTypes.FILETIME created, accessed, written;
+    public uint sizeHigh, sizeLow, tag, reserved;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=260)] public string name;
+    [MarshalAs(UnmanagedType.ByValTStr, SizeConst=14)] public string alternate;
+  }
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true, ExactSpelling=true)]
+  static extern IntPtr FindFirstFileW(string path, out FindData data);
+  [DllImport("kernel32.dll")]
+  [return: MarshalAs(UnmanagedType.Bool)]
+  static extern bool FindClose(IntPtr handle);
+  public static uint Tag(string path) {
+    FindData data;
+    IntPtr handle=FindFirstFileW(path, out data);
+    if (handle == new IntPtr(-1)) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+    try {
+      if ((data.attributes & 0x400) == 0) throw new InvalidOperationException("Path attributes changed; retry the render.");
+      return data.tag;
+    } finally { FindClose(handle); }
+  }
+}
+'@
+  }
+  return [RelayPathInfo]::Tag($path)
+}
+function Check-ReparseTag([uint32]$tag,[string]$path) {
+  # A reparse point is not necessarily a link. Cloud Files tags describe sync
+  # placeholders, while the name-surrogate bit means another path is targeted.
+  # Allow only the documented CLOUD / CLOUD_1 .. CLOUD_F family, not arbitrary tags.
+  if (($tag -band 0x20000000) -ne 0) { throw "Symlinks and junctions are not supported: $path" }
+  if (($tag -band [uint32]4294905855) -ne [uint32]2415919130) {
+    throw ('Unsupported Windows path marker 0x{0:X8} at {1}. Relay has not changed this file.' -f $tag,$path)
+  }
+}
 function SafePath([string]$p) {
   if (![System.IO.Path]::IsPathRooted($p) -or $p.StartsWith('\\') -or $p.StartsWith('\\?\')) { throw 'Only local absolute Windows paths are supported.' }
   if ($p.Contains(';') -or $p.Substring(2).Contains(':')) { throw 'Semicolons and alternate data streams are not supported.' }
@@ -529,7 +572,9 @@ function SafePath([string]$p) {
   if ($item.PSIsContainer) { throw 'Expected an existing file.' }
   $part=$item
   while ($null -ne $part) {
-    if (($part.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Symlinks and junctions are not supported.' }
+    if (($part.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
+      Check-ReparseTag (Get-ReparseTag $part.FullName) $part.FullName
+    }
     $part=$part.Parent
     if ($null -eq $part -and $item -is [IO.FileInfo]) { $part=$item.Directory;$item=$part }
   }
