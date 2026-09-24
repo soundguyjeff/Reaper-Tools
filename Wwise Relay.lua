@@ -662,7 +662,7 @@ local function retry_failed()
   assert(#paths>0,'No linked failures to retry')
   local items=fs:inspect(paths)
   for _,v in ipairs(items) do assert(v.ok,v.error or 'Cannot read rendered file') end
-  s.pending=items;s.results={};s.containers={};s.busy=true;s.error=nil
+  s.pending=items;s.results={};s.containers={};s.busy=true;s.error=nil;s.tab='Latest render'
 end
 local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
@@ -687,7 +687,7 @@ local function tick()
     s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
   end
   local ready=s.detector:take(time)
-  if ready then s.results={};s.containers={};s.selected_container=1;s.pending=ready;s.busy=true;s.error=nil end
+  if ready then s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.pending=ready;s.busy=true;s.error=nil end
 end
 
 local green,amber,red,muted=0x95D5AEFF,0xEDC28AFF,0xEBA0A0FF,0xB0B5BEFF
