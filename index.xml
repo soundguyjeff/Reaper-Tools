@@ -44,4 +44,449 @@
       </version>
     </reapack>
   </category>
+  <category name="Jeff">
+    <reapack name="100 HPF.lua" type="script" desc="100 HPF">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: ReaEQ; Saved REAPER FX preset: Jeff - 100 HPF (not included). Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220fab310cfdc327971ffbd42a1b967a83524ef69743d4067b6019c56ae4a40be19">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/100%20HPF.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="140 HPF.lua" type="script" desc="140 HPF">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: ReaEQ; Saved REAPER FX preset: Jeff - 140 HPF (not included). Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220969c6b992076cd078d4d7afde3c85024b291030e295c5eeb03ff13ccc15f376e">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/140%20HPF.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="8k LPF.lua" type="script" desc="8k LPF">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: ReaEQ; Saved REAPER FX preset: Jeff - 8k LPF (not included). Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122066feb37e9650e169ce650c872f75701c944627657d464d1d4dc2cf6de92b93f9">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/8k%20LPF.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="HPF LPF.lua" type="script" desc="HPF LPF">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: ReaEQ; Saved REAPER FX preset: Jeff - HPF LPF (not included). Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12203cdd76a5893504c3a3ac65b5d6f702bb41254e4d3fc2bdc512c15a232153563e">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/HPF%20LPF.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Hi Boost.lua" type="script" desc="Hi Boost">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: ReaEQ; Saved REAPER FX preset: Jeff - Hi Boost (not included). Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12206ecf36c9095c4ddfe29c86de553fbeaef3554bdf517b3697ddc15c1ce710f0fa">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Hi%20Boost.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff - Exclusive Solo.lua" type="script" desc="Exclusive Solo">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="2" author="X-Raym" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122028b3ed31ea419c54ad50c02905df2b9dee9f9c6c249d1a039a3b4a3f12ea8e48">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff%20-%20Exclusive%20Solo.lua</source>
+        <source file="Licenses/Jeff - Exclusive Solo.GPL-3.0.txt" hash="1220fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/licenses/GPL-3.0.txt</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Copy Markers in Time Selection.lua" type="script" desc="Copy Markers in Time Selection">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122006e7e31b2e136e18d12889d4c0dc6667bd24684529615d3dfb76c41e0d7f066b">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Copy%20Markers%20in%20Time%20Selection.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Copy Take Pan Down.lua" type="script" desc="Copy Take Pan Down">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: SWS extension. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.5" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12206904f869ea95f105baf97bd75e08e247ec1d31f1daca431c9596616f90cf8e1d">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Copy%20Take%20Pan%20Down.lua</source>
+        <source file="Licenses/Jeff_Copy Take Pan Down.GPL-3.0.txt" hash="1220fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/licenses/GPL-3.0.txt</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Custom PlayStop (PT Style).lua" type="script" desc="Custom Play/Stop (PT Style)">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12207d8ba406a7a70690327454b65a005c667f2c3f0d6be012ea0c853790b58380a4">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Custom%20Play%EF%80%A2Stop%20%28PT%20Style%29.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Duplicate Items and Markers (with Prompt).lua" type="script" desc="Duplicate Items and Markers (with Prompt)">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12208a16d430212ae2d53912e280620ca7271cbf6e10917d7b458ff75a26ac318590">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Duplicate%20Items%20and%20Markers%20%28with%20Prompt%29.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Duplicate Markers in Time Selection.lua" type="script" desc="Duplicate Markers in Time Selection">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.7" author="ChatGPT" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220180f1463839f7d7a8b7b6e14333653648713155d3980eec4dc3240353d85bb91">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Duplicate%20Markers%20in%20Time%20Selection.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Extend Time Selection to Next Item Edge.lua" type="script" desc="Extend Time Selection to Next Item Edge">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220eb12835db678778e6511c283c027d02a9ea1290e95a6d9a29e345be355a57c94">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Extend%20Time%20Selection%20to%20Next%20Item%20Edge.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Hide All Take Envelopes.lua" type="script" desc="Hide All Take Envelopes">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: SWS extension. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.00" author="Adapted by ChatGPT from Lokasenna's script" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220717d335e07d14d3ce146db24a2e07074f83f08dc1644daf260703fd80173567e">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Hide%20All%20Take%20Envelopes.lua</source>
+        <source file="Licenses/Jeff_Hide All Take Envelopes.GPL-3.0.txt" hash="1220fb981668c18a279e285fc4d83fba1e836cc84dd4daa73c9697d3cfd2d8aca6e0">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/licenses/GPL-3.0.txt</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Move Edit Cursor Right (Popup).lua" type="script" desc="Move Edit Cursor Right (Popup)">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122084a9f2288db30162569cb308b2e97e703738fa6326a1cc6bfb86c3dd9a4b9bd5">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Move%20Edit%20Cursor%20Right%20%28Popup%29.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Move Edit Cursor for Media Item Top Half.lua" type="script" desc="Move Edit Cursor for Media Item Top Half">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: SWS extension. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220208bba80413b8ae521a6ca4d06d514f4813855224f2f82319ed8daabad843a7e">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Move%20Edit%20Cursor%20for%20Media%20Item%20Top%20Half.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Move Edit Cursor to End of Last Item in Selection.lua" type="script" desc="Move Edit Cursor to End of Last Item in Selection">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220f9a6b6ed1acd924241b7cfe8f82265c4c05932211bd8f3bb72fb8434472f293e">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Move%20Edit%20Cursor%20to%20End%20of%20Last%20Item%20in%20Selection.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Move Edit Cursor to Start of Selection.lua" type="script" desc="Move Edit Cursor to Start of Selection">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220d840179ba4a86bd281296ddd43b2725cf6485e05016ed812dbe7da89b7d55413">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Move%20Edit%20Cursor%20to%20Start%20of%20Selection.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Nudge Edit Cursor Left - Saved Dialog Settings 1.lua" type="script" desc="Nudge Edit Cursor Left - Saved Dialog Settings 1">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: Existing SWS/Saved Nudge 1 Distance extension setting used by this local script. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220ddb03e807a78817b81194ebedceb5110b8a99781c66ff9bd5c899fb50a08ad6b">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Nudge%20Edit%20Cursor%20Left%20-%20Saved%20Dialog%20Settings%201.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Nudge Left - 1 Frame - PT Style.lua" type="script" desc="Nudge Left - 1 Frame - PT Style">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Requires: SWS extension. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12202abcc74223828cc6db5ef2f821c18f9fc9d11b2b37b313f74e0a2fe1b6250650">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Nudge%20Left%20-%201%20Frame%20-%20PT%20Style.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Nudge Left - 5 Frames - PT Style.lua" type="script" desc="Nudge Left - 5 Frames - PT Style">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12208f64824e8907c3fafc7d0f3cb14eaf0ac6df45572483c94e690111e099235010">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Nudge%20Left%20-%205%20Frames%20-%20PT%20Style.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Nudge Right - 1 Frame - PT Style.lua" type="script" desc="Nudge Right - 1 Frame - PT Style">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12204352ceb1a5f790d4e59c7d233c3cb91c6dd7ff9d3f363b771af3123112bd27bb">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Nudge%20Right%20-%201%20Frame%20-%20PT%20Style.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Nudge Right - 5 Frames - PT Style.lua" type="script" desc="Nudge Right - 5 Frames - PT Style">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220ff06d7a645487e195e5541809fe4a2d957f5d3356ed1743ba1884d7db313e7bf">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Nudge%20Right%20-%205%20Frames%20-%20PT%20Style.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Nudge Right - PT Style.lua" type="script" desc="Nudge Right - PT Style">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220a1f5501680dcbad88a69b481cce212da1aabb3f7022db3bb33ffee206acdae03">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Nudge%20Right%20-%20PT%20Style.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #1.lua" type="script" desc="Recall Temp Marker #1">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122006d256b405a16b4f117e54d83afe7b6322de876d6d720c8a018b1442d9d97294">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%231.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #10.lua" type="script" desc="Recall Temp Marker #10">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12205ae6c25113ad7d793c818304a3878b98139354dc0990bef4c0872b84d93dedda">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%2310.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #2.lua" type="script" desc="Recall Temp Marker #2">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220b3336f22fa485f0787886a70db2527190dfc66a1b38cc06969ac4f34b88be582">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%232.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #3.lua" type="script" desc="Recall Temp Marker #3">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220d4ca9df7e7cd759895a0094ccbf784433b3a256b0112827daa0539e0eb1ae6b2">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%233.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #4.lua" type="script" desc="Recall Temp Marker #4">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220c7a4266fc49a61ef997a7b6edaa335282ca95d50a791160d5ddaeabbc118b00e">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%234.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #5.lua" type="script" desc="Recall Temp Marker #5">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12206ca0a1f1654d2fe93eb1c5e00c36e88f695dddda9d226de21885e2eeffa9d624">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%235.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #6.lua" type="script" desc="Recall Temp Marker #6">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220d8c8b47866ac73f39e098125229affaf44dda6065c00c155187eeadb65eaaa15">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%236.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #7.lua" type="script" desc="Recall Temp Marker #7">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12202688601532039bba6a8f0def8228727600bcf428117ba815aa74b4f303544781">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%237.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #8.lua" type="script" desc="Recall Temp Marker #8">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220747ab6ed0911d11a3cf1741470b2ae9ce99b58185edc9aec6e22a302617a7e67">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%238.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Recall Temp Marker #9.lua" type="script" desc="Recall Temp Marker #9">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12200304934b00d38de3238658a213d3510b94b6582c543c1b302b48606c93349f97">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Recall%20Temp%20Marker%20%239.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #1.lua" type="script" desc="Save Temp Marker #1">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122051df4a5394bd74f0012d646754bf4e93a780ce9fffb765b3897f1e6fa246788b">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%231.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #10.lua" type="script" desc="Save Temp Marker #10">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="12207709804d2287dc1110cecc5495143ad8397eff8ac933176df898ff1e86dd6609">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%2310.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #2.lua" type="script" desc="Save Temp Marker #2">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122092173a30d807cf77305dd885737589a09bd6df1bddd592cb6ee89948c146a575">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%232.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #3.lua" type="script" desc="Save Temp Marker #3">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220ebe0cc1447e8b1470364f6b59ceec34730ca6d3dcd6e959712206be2ed7c5548">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%233.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #4.lua" type="script" desc="Save Temp Marker #4">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220c8241a5b2f285cfd832f214f4422fb3df1376c2193447040a3ddf50c0b545782">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%234.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #5.lua" type="script" desc="Save Temp Marker #5">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220f525483208526f903224c515b27de0d08540a1fa05ec9b24c5ac09eeb0f37ecc">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%235.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #6.lua" type="script" desc="Save Temp Marker #6">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220aed41c1d1846c961db9f6fbfb89a345e1ac4eecb792414a7b8707218cf177668">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%236.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #7.lua" type="script" desc="Save Temp Marker #7">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220dd3f38b69b7949729ef6b5bb71aa1cbc6a6b37f6d7e8d4f7388d6b6014b76ab7">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%237.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #8.lua" type="script" desc="Save Temp Marker #8">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="1220b334fda9d4e7d42cabda6239356e9100506bdd2af83f1c726c93ab313c07c9ea">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%238.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Save Temp Marker #9.lua" type="script" desc="Save Temp Marker #9">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122033a5a302056e20d6de1ceaa1e53bdd88ec2b7321d00ff95874e82dcd61edfa42">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Save%20Temp%20Marker%20%239.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+    <reapack name="Jeff_Toggle_FXItem_Window.lua" type="script" desc="Toggle_FXItem_Window">
+      <metadata>
+        <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools/blob/main/docs/JEFF-SCRIPTS.md">Installation, requirements and existing shortcuts</link>
+        <description>{\rtf1\ansi Unmodified script from Jeff's local collection. Syntax checked; behavior has not been audited. Existing script credits are retained. Installing does not migrate shortcuts from older local copies.}</description>
+      </metadata>
+      <version name="1.0" author="Jeff" time="2026-09-24T15:22:06-05:00">
+        <source main="main" hash="122095c99662fc5e6222707de7fd201deed1eb51c8760fbd9ed0e800ba06c5c330f7">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ba5895366b50506bb0a73f5ca1feb508d941a44e/Jeff/Jeff_Toggle_FXItem_Window.lua</source>
+        <changelog>First ReaPack publication of this local copy. Script contents and filename unchanged.</changelog>
+      </version>
+    </reapack>
+  </category>
 </index>
