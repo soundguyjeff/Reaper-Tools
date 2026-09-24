@@ -2,7 +2,7 @@
 
 **Jeff scripts:** 44 of your Lua scripts are now individually installable in ReaPack under **Reaper Tools → Jeff**. Three additional scripts are archived pending repair. [Installation, requirements and preserving existing shortcuts](docs/JEFF-SCRIPTS.md).
 
-## Wwise Relay — v0.3.2 Windows test build
+## Wwise Relay — v0.3.3 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -21,6 +21,12 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 ```
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
+
+### v0.3.3 — linked project folders
+
+Directory junctions and directory symbolic links such as `C:\Phobos` now resolve to their real local file paths. Relay pins the resolved render and original locations, checks them again before replacement, and rejects two paths that resolve to the same WAV. Links on individual files and network targets remain unsupported. The existing-object, WAV validation, read-only, conflict and no-backup checks remain in place.
+
+This local build has passed Mac-hosted Lua and PowerShell checks; the new native Windows junction tests still need a Windows run. The published ReaPack feed remains at v0.3.2 until this build is published.
 
 ### v0.3.2 — targeted matching and verified conversion
 
@@ -46,7 +52,7 @@ Stopping or timing out does not undo a completed replacement or cancel a convers
 
 **Windows Script Host (`wscript.exe`, JScript) and Windows PowerShell 5.1 must be available.** The GUI script host starts the helper hidden without waiting in REAPER. If either is blocked, Relay reports it; it does not change system policy. ReaWwise can remain installed for NVK and your other tools, but Relay no longer requires or uses its shared connection.
 
-Dropbox/Windows Cloud Files markers remain supported, while actual symbolic links, junctions and unknown tags remain blocked. Keep working audio available offline. Automated tests use a local WAMP test peer with deliberately stalled connections and synthetic files. Real Wwise conversion was also tested locally; native Windows/NVK verification is still required.
+Dropbox/Windows Cloud Files markers remain supported, while links on individual files and unknown tags remain blocked; directory links now resolve to local targets. Keep working audio available offline. Automated tests use a local WAMP test peer with deliberately stalled connections and synthetic files. Real Wwise conversion was also tested locally; native Windows/NVK verification is still required.
 
 ### Automatic matching
 
@@ -87,7 +93,7 @@ An unmatched or ambiguous render is skipped. A failure pauses further replacemen
 
 - No new audio, object creation/deletion, project saves, SoundBank generation, conversion-setting changes or source-control checkout. The only permitted import operation is a refresh of one existing source from its own existing original. The existing original and its converted cache are the intended changes.
 - Exact project identity, unique sound name, source ID, parent, active source, original path and destination content are checked. Wrong projects, shared originals, read-only files, missing files and channel-count changes are rejected. The current original is hashed immediately before each replacement; if it changes during staging, replacement is rejected. Earlier edits are not remembered as conflicts between renders.
-- Standard local RIFF WAV files only: PCM, float or extensible. Converted media must be a RIFF WEM with a Wwise content-hash chunk. No network paths, symbolic links/junctions, RF64/BW64, localized voice audio or semicolons in paths in this release. Render to a separate folder, not directly into Wwise Originals.
+- Standard local RIFF WAV files only: PCM, float or extensible. Converted media must be a RIFF WEM with a Wwise content-hash chunk. No network paths, links on individual files, RF64/BW64, localized voice audio or semicolons in paths in this release. Render to a separate folder, not directly into Wwise Originals.
 - Detection uses REAPER's latest completed `RENDER_STATS` report plus the listed files' timestamps/size. This is not a direct NVK callback. If NVK runs several native render groups before deferred scripts resume, only the final group's report may be visible. **Test your multi-group NVK workflow before relying on batch coverage.** Check the reported count against your outputs.
 - A manual edit to a WAV still named in the last render report can also look like a new render. Pause Relay while externally editing those files. Merely opening Relay or enabling it establishes a baseline and does not replay old renders.
 - Updates are sequential, not a batch transaction. Successful earlier files remain updated if a later one fails. Slow file operations and Wwise calls run outside REAPER; large responses are processed in short panel steps. Do not rename/reorganize the matched Wwise objects while a batch is updating.

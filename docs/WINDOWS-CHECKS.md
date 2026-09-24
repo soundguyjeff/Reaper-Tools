@@ -1,4 +1,4 @@
-# Wwise Relay v0.3.2: Windows check
+# Wwise Relay v0.3.3: Windows check
 
 No remote access or internet connection is required at runtime. These checks are manual; you do not need to run any developer commands.
 
@@ -34,3 +34,5 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versions, and whether it was a single render or multiple NVK groups. You can redact project names and paths; audio/project files are not needed to report a problem.
 
 Do not treat a successful panel notification as proof that the game played the new media: verify that once through the remote connection. Relay stops at the Wwise conversion boundary by design.
+
+17. **Linked project root:** Open a test Wwise project through a local directory junction such as `C:\Phobos`. Render to a separate folder. Confirm one matched existing source updates and converts, and unrelated originals remain unchanged. Also test a render folder reached through a directory junction.

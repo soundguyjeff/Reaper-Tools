@@ -2,8 +2,8 @@ param([Parameter(Mandatory=$true)][string]$RequestFile)
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 try { [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false) } catch { }
-function Get-ReparseTag([string]$path) {
-  if ($env:OS -ne 'Windows_NT') { throw "Symlinks and junctions are not supported: $path" }
+function Initialize-PathInfo {
+  if ($env:OS -ne 'Windows_NT') { throw "Windows path resolution is unavailable on this platform." }
   if (!('RelayPathInfo' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
@@ -22,6 +22,22 @@ public static class RelayPathInfo {
   [DllImport("kernel32.dll")]
   [return: MarshalAs(UnmanagedType.Bool)]
   static extern bool FindClose(IntPtr handle);
+  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true, ExactSpelling=true)]
+  static extern uint GetFinalPathNameByHandleW(Microsoft.Win32.SafeHandles.SafeFileHandle handle,
+    System.Text.StringBuilder path, uint size, uint flags);
+  public static string FinalPath(string path) {
+    using (var stream = new System.IO.FileStream(path, System.IO.FileMode.Open,
+      System.IO.FileAccess.Read, System.IO.FileShare.Read)) {
+      var buffer = new System.Text.StringBuilder(32768);
+      uint size = GetFinalPathNameByHandleW(stream.SafeFileHandle, buffer, (uint)buffer.Capacity, 0);
+      if (size == 0) throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+      if (size >= buffer.Capacity) throw new System.IO.IOException("Resolved path is too long.");
+      string result = buffer.ToString();
+      if (!result.StartsWith(@"\\?\") || result.Length < 7 || result[5] != ':' || result[6] != '\\')
+        throw new System.IO.IOException("Linked paths must resolve to a local drive.");
+      return result.Substring(4);
+    }
+  }
   public static uint Tag(string path) {
     FindData data;
     IntPtr handle=FindFirstFileW(path, out data);
@@ -34,9 +50,14 @@ public static class RelayPathInfo {
 }
 '@
   }
+}
+function Get-ReparseTag([string]$path) {
+  Initialize-PathInfo
   return [RelayPathInfo]::Tag($path)
 }
-function Check-ReparseTag([uint32]$tag,[string]$path) {
+function Check-ReparseTag([uint32]$tag,[string]$path,[bool]$directory=$false) {
+  # Only documented directory junctions/symlinks may redirect a project root.
+  if ($directory -and $tag -in @([uint32]2684354563,[uint32]2684354572)) { return }
   # A reparse point is not necessarily a link. Cloud Files tags describe sync
   # placeholders, while the name-surrogate bit means another path is targeted.
   # Allow only the documented CLOUD / CLOUD_1 .. CLOUD_F family, not arbitrary tags.
@@ -54,10 +75,15 @@ function SafePath([string]$p) {
   $part=$item
   while ($null -ne $part) {
     if (($part.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
-      Check-ReparseTag (Get-ReparseTag $part.FullName) $part.FullName
+      Check-ReparseTag (Get-ReparseTag $part.FullName) $part.FullName ([bool]$part.PSIsContainer)
     }
     $part=$part.Parent
     if ($null -eq $part -and $item -is [IO.FileInfo]) { $part=$item.Directory;$item=$part }
+  }
+  if ($env:OS -eq 'Windows_NT') {
+    Initialize-PathInfo
+    $full=[RelayPathInfo]::FinalPath($full)
+    if ($full.Contains(';') -or $full.Substring(2).Contains(':')) { throw 'Unsupported resolved path.' }
   }
   return $full
 }
@@ -138,7 +164,7 @@ function Inspect([string]$p,[bool]$hash=$false) {
     $stream=[IO.File]::Open($full,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try {
       $info=WaveInfo $stream
-      $result=@{path=$p;ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
+      $result=@{path=$p;resolvedPath=$full;ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
       if ($hash) { $result.sha=HashStream $stream;$result.audioSha=AudioHash $stream }
       return $result
     } finally { $stream.Dispose() }
@@ -160,6 +186,10 @@ function Invoke-Request($req) {
     finally { $stream.Dispose() }
   } elseif ($req.action -eq 'replace') {
     $src=SafePath $req.source;$dst=SafePath $req.destination
+    if (($req.sourcePath -and ![StringComparer]::OrdinalIgnoreCase.Equals($src,$req.sourcePath)) -or
+        ($req.destinationPath -and ![StringComparer]::OrdinalIgnoreCase.Equals($dst,$req.destinationPath))) {
+      throw 'A linked folder changed after inspection; render again.'
+    }
     if ([StringComparer]::OrdinalIgnoreCase.Equals($src,$dst)) { throw 'Source and destination must differ.' }
     if (([IO.File]::GetAttributes($dst) -band [IO.FileAttributes]::ReadOnly) -ne 0) { throw 'Original WAV is read-only; check it out in source control first.' }
     $renderStream=$null;$original=$null;$out=$null;$temp=$null
@@ -189,6 +219,10 @@ function Invoke-Request($req) {
       if ((HashStream $original) -ne $req.destinationSha) { throw 'Original changed during replacement preparation.' }
       $original.Dispose();$original=$null
       Assert-RequestAlive
+      if (![StringComparer]::OrdinalIgnoreCase.Equals((SafePath $req.source),$src) -or
+          ![StringComparer]::OrdinalIgnoreCase.Equals((SafePath $req.destination),$dst)) {
+        throw 'A linked folder changed during replacement preparation.'
+      }
       [IO.File]::Replace($temp,$dst,[System.Management.Automation.Language.NullString]::Value);$temp=$null
       $verify=Inspect $dst $true
       if (!$verify.ok -or $verify.sha -ne $sha) { throw 'Replacement occurred, but readback verification failed. Check the original WAV.' }

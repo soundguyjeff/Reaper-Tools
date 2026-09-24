@@ -99,7 +99,7 @@ try {
   Check ($a.items[0].ok) 'Unicode filenames work'
   # Test the production tag classifier without needing a Dropbox account/provider.
   $ast=[System.Management.Automation.Language.Parser]::ParseFile($worker,[ref]$null,[ref]$null)
-  foreach ($name in @('Check-ReparseTag','Get-ReparseTag')) {
+  foreach ($name in @('Initialize-PathInfo','Check-ReparseTag','Get-ReparseTag')) {
     $fn=$ast.Find({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name},$true)
     . ([scriptblock]::Create($fn.Extent.Text))
   }
@@ -110,6 +110,9 @@ try {
     try { Check-ReparseTag $tag 'exact component' } catch { $rejected=$_.Exception.Message.Contains('exact component') }
     Check $rejected ('Redirecting or unknown tag 0x{0:X8} is rejected with its location' -f $tag)
   }
+  Check-ReparseTag ([uint32]2684354563) 'project junction' $true
+  Check-ReparseTag ([uint32]2684354572) 'directory symlink' $true
+  Check $true 'Directory junctions and symbolic links are accepted for resolution'
   if ($env:OS -eq 'Windows_NT') {
     $target=Join-Path $root 'target';[IO.Directory]::CreateDirectory($target) | Out-Null
     $targetWav=Join-Path $target 'audio.wav';Wave $targetWav 15;$originalHash=Sha $targetWav
@@ -119,10 +122,21 @@ try {
       Check ((Get-ReparseTag $junction) -eq [uint32]2684354563) 'Native Windows tag lookup identifies a real junction'
       $viaLink=Join-Path $junction 'audio.wav'
       $a=Call @{action='inspect';paths=@($viaLink)}
-      Check (!$a.items[0].ok -and $a.items[0].error.Contains($junction)) 'Render through a junction is rejected and identifies the parent'
+      Check ($a.items[0].ok -and $a.items[0].resolvedPath -eq $targetWav) 'Junction resolves to the real local WAV'
+      $out=Call @{action='replace';source=$targetWav;destination=$viaLink;stamp=$a.items[0].stamp;destinationSha=$originalHash}
+      Check (!$out.ok -and (Sha $targetWav) -eq $originalHash) 'Two aliases of the same WAV are rejected'
       Wave $src 18;$a=Call @{action='inspect';paths=@($src)}
       $out=Call @{action='replace';source=$src;destination=$viaLink;stamp=$a.items[0].stamp;destinationSha=$originalHash}
-      Check (!$out.ok -and (Sha $targetWav) -eq $originalHash) 'Original through a junction is rejected without modifying target audio'
+      Check ($out.ok -and (Sha $targetWav) -eq (Sha $src)) 'Existing WAV under a project junction is replaced'
+      Check ((Sha $other) -eq $oldOther) 'Junction replacement leaves unrelated audio unchanged'
+      $otherTarget=Join-Path $root 'other-target';[IO.Directory]::CreateDirectory($otherTarget) | Out-Null
+      $otherWav=Join-Path $otherTarget 'audio.wav';Wave $otherWav 27;$otherHash=Sha $otherWav
+      [IO.Directory]::Delete($junction)
+      New-Item -ItemType Junction -Path $junction -Target $otherTarget | Out-Null
+      $out=Call @{action='replace';source=$src;destination=$viaLink;sourcePath=$src;destinationPath=$targetWav;stamp=$a.items[0].stamp;destinationSha=$otherHash}
+      Check (!$out.ok -and $out.error.Contains('linked folder changed') -and (Sha $otherWav) -eq $otherHash) 'Retargeted junction is rejected before writing'
+      $out=Call @{action='inspect';paths=@((Join-Path $junction 'missing.wav'))}
+      Check (!$out.items[0].ok) 'Missing WAV under a junction is not created'
     } finally { [IO.Directory]::Delete($junction) }
   }
   Write-Host "Passed $count Windows file-safety tests."

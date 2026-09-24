@@ -1,3 +1,13 @@
+# Wwise Relay v0.3.3 local candidate
+
+- 46 core Lua checks, 16 resolver checks, 6 conversion checks and 27 simulated panel workflows passed.
+- 30 PowerShell file checks passed on macOS. These do not execute Windows kernel calls.
+- Embedded Windows C# path resolver compiled successfully on macOS.
+- Added Windows-only regressions for resolving a real directory junction, replacing an existing WAV through it, same-file aliases, retargeted junctions and missing files. Not yet executed on Windows for this candidate.
+- No native Windows/NVK or live Wwise end-to-end validation is claimed for v0.3.3.
+
+## Previous release evidence
+
 # Wwise Relay v0.3.2 validation
 
 ## Real Wwise test

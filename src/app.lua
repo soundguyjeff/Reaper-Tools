@@ -176,7 +176,7 @@ local function process_one()
       local checks=fs:inspect({link.original},true)
       local original=checks[1]
       assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
-      link.destination_sha=original.sha
+      link.destination_sha=original.sha;link.destination_path=original.resolvedPath
       local previous_hash=w:content_hash(link,profile.platform)
       s.detail='Replacing the existing WAV...';coroutine.yield()
       local replaced=fs:replace(link,item)

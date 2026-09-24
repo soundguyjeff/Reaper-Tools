@@ -154,7 +154,7 @@ function M:inspect(paths,hash)
   return self:run({action='inspect',paths=C.array(paths),hash=hash or false}).items
 end
 function M:replace(link,item)
-  return self:run({action='replace',source=link.render,destination=link.original,stamp=item.stamp,destinationSha=link.destination_sha})
+  return self:run({action='replace',source=link.render,destination=link.original,stamp=item.stamp,destinationSha=link.destination_sha,sourcePath=item.resolvedPath,destinationPath=link.destination_path})
 end
 function M:artifact(path,content_hash)
   assert(C.guid(content_hash),'Wwise returned no content identity')
