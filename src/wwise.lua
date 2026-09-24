@@ -6,7 +6,7 @@ local allow={
  ['ak.wwise.core.audio.convert']=true,['ak.wwise.ui.commands.execute']=true,
  ['ak.wwise.ui.bringToForeground']=true,
 }
-function M.new(r,port) return setmetatable({r=r,port=port or 8080,connected=false},M) end
+function M.new(r,port,backend) return setmetatable({r=r,port=port or 8080,backend=backend,connected=false},M) end
 function M:call(uri,args,options,read)
   assert(allow[uri],'Wwise operation is not permitted')
   if uri=='ak.wwise.ui.commands.execute' then assert(args.command=='FindInProjectExplorerSyncGroup1','Only navigation is permitted') end
@@ -14,37 +14,17 @@ function M:call(uri,args,options,read)
     assert(#args.objects==1 and C.guid(args.objects[1]),'Conversion must target one matched audio source')
     assert(#args.platforms==1 and #args.languages==1 and args.languages[1]=='SFX','Conversion scope is invalid')
   end
-  local r,owned=self.r,{}
-  local function own(p) if p then owned[#owned+1]=p end;return p end
-  local function encode(v)
-    if type(v)=='string' then return own(r.AK_AkVariant_String(v)) end
-    if type(v)=='boolean' then return own(r.AK_AkVariant_Bool(v)) end
-    if type(v)=='number' then return own(r.AK_AkVariant_Int(v)) end
-    assert(type(v)=='table')
-    local arr=(getmetatable(v) or {}).__array or #v>0
-    local p=own(arr and r.AK_AkJson_Array() or r.AK_AkJson_Map())
-    if arr then for _,x in ipairs(v) do assert(r.AK_AkJson_Array_Add(p,encode(x))) end
-    else for k,x in pairs(v) do assert(r.AK_AkJson_Map_Set(p,k,encode(x))) end end
-    return p
-  end
+  local data=self.backend:run({action='waapi',port=self.port,uri=uri,args=args or {},options=options or {}}).data
+  assert(type(data)=='table','Wwise returned no result object')
   local Q={}
-  function Q.get(p,k) return own(r.AK_AkJson_Map_Get(p,k)) end
-  function Q.text(p,k) local v=k and Q.get(p,k) or p;return v and r.AK_AkVariant_GetString(v) or '' end
+  function Q.get(p,k) return p and p[k] end
+  function Q.text(p,k) local v=k and Q.get(p,k) or p;return type(v)=='string' and v or '' end
   function Q.list(p,k,reader)
-    local a=k and Q.get(p,k) or p;local out={};if not a then return out end
-    for i=0,r.AK_AkJson_Array_Size(a)-1 do out[#out+1]=reader(own(r.AK_AkJson_Array_Get(a,i))) end
+    local a=k and Q.get(p,k) or p;local out={}
+    for _,v in ipairs(a or {}) do C.checkpoint();out[#out+1]=reader(v) end
     return out
   end
-  local ok,result=pcall(function()
-    local p=own(r.AK_Waapi_Call(uri,encode(args or {}),encode(options or {})))
-    assert(p,'Wwise did not respond')
-    assert(r.AK_AkJson_GetStatus(p),Q.text(p,'message')~='' and Q.text(p,'message') or ('Wwise rejected '..uri))
-    return read and read(Q,p) or true
-  end)
-  -- Clear only handles created by this call; ReaWwise is shared with other tools.
-  for i=#owned,1,-1 do pcall(r.AK_AkJson_Clear,owned[i]) end
-  if not ok then error(result,0) end
-  return result
+  return read and read(Q,data) or true
 end
 local function read_object(Q,p)
   local par=Q.get(p,'parent')
@@ -67,8 +47,7 @@ function M:project()
   return p[1]
 end
 function M:connect()
-  assert(self.r.AK_Waapi_Connect,'Install Audiokinetic ReaWwise through ReaPack, then restart REAPER')
-  assert(self.r.AK_Waapi_Connect('127.0.0.1',self.port),'Cannot connect. Enable WAAPI in Wwise preferences and check the port.')
+  self.connected=false
   local version=self:call('ak.wwise.core.getInfo',{}, {},function(Q,p)return Q.text(Q.get(p,'version'),'displayName')end)
   assert(version:match('2024%.1%.1%f[^%d]'),'This release targets the Wwise 2024.1.1 API. Connected version: '..version)
   local project=self:project()
@@ -86,7 +65,7 @@ end
 function M:sources()
   local a=self:objects({ofType={'AudioFileSource'}})
   local prefix=C.key(self.originals)..'\\sfx\\'
-  for _,s in ipairs(a) do s.language=C.key(s.original):sub(1,#prefix)==prefix and 'SFX' or 'Other' end
+  for _,s in ipairs(a) do C.checkpoint(); s.language=C.key(s.original):sub(1,#prefix)==prefix and 'SFX' or 'Other' end
   return a
 end
 function M:check_project(profile)
@@ -111,7 +90,7 @@ function M:match(path,profile,catalog)
   if not sound then return nil,reason end
   local active=self:active_source(sound.id,profile.platform)
   local source
-  for _,candidate in ipairs(catalog.sources) do if candidate.id==active then source=candidate end end
+  for _,candidate in ipairs(catalog.sources) do C.checkpoint(); if candidate.id==active then source=candidate end end
   if not source then return nil,'The matched sound has no active file-based audio source on the selected platform.' end
   local link={render=path,source_id=source.id,sound_id=sound.id,container_id=sound.parent_id,
     sound_name=sound.name,sound_path=sound.path,source_path=source.path,original=source.original,
@@ -129,7 +108,7 @@ function M:verify(link,profile)
   assert(sound.id==link.sound_id,'The matching Wwise sound changed during the update')
   assert(sound.parent_id==link.container_id,'Sound moved to another container during the update; render again')
   local live
-  for _,s in ipairs(catalog.sources) do if s.id==link.source_id then live=s end end
+  for _,s in ipairs(catalog.sources) do C.checkpoint(); if s.id==link.source_id then live=s end end
   C.validate_link(link,live,catalog.sources,profile.project_id,profile.project_path)
   assert(self:active_source(sound.id,profile.platform)==link.source_id,'Active Wwise source changed; update skipped')
   return true

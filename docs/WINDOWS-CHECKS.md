@@ -24,6 +24,8 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 
 16. **Dropbox/cloud paths:** With a rendered WAV available offline in your normal Dropbox folder, confirm it can be inspected and updated. If a path is still rejected, the message should identify the exact link or show an unsupported marker code. Automated tests cover the cloud-tag classifier and real Windows junctions; they do not run Dropbox itself.
 
+17. **Responsiveness:** With Wwise closed or the port incorrect, click Connect. REAPER should remain usable and Relay must show an error instead of hanging. While waiting, try Stop waiting. After connecting correctly, confirm REAPER stays usable during file checking and conversion. Stopping does not undo a WAV already replaced or cancel a conversion already sent to Wwise.
+
 If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versions, and whether it was a single render or multiple NVK groups. You can redact project names and paths; audio/project files are not needed to report a problem.
 
 Do not treat a successful panel notification as proof that the game played the new media: verify that once through the remote connection. Relay stops at the Wwise conversion boundary by design.

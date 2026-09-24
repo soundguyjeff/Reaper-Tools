@@ -5,6 +5,7 @@ local function scenario(mode)
   local now,click,toggle,report=0,nil,false,'FILE:C:\\render.wav;'
   local replaced,converted,shown=0,0,0
   local next_frame,exit_cb
+  local ui_frames,closed=0,0
   local messages={}
   local master={}
   local startup_message
@@ -16,7 +17,7 @@ local function scenario(mode)
   local saved_profile
   local w={connected=false,platforms={{id=id,name='Windows'}}}
   function w:project() return {id=id,file=mode=='wrong_project' and 'C:\\other.wproj' or 'C:\\game.wproj'} end
-  function w:connect() self.connected=true;return self:project(),{} end
+  function w:connect() if mode=='connect_stall' then for _=1,1000 do coroutine.yield() end end;self.connected=true;return self:project(),{} end
   function w:catalog(p) assert(self:project().file==p.project_path,'Wrong project');return {} end
   function w:match(path)
     if mode=='unknown' or (mode=='mixed' and path:find('unknown',1,true)) then return nil,'No existing Wwise Sound named unlinked.' end
@@ -24,11 +25,11 @@ local function scenario(mode)
     local result={};for k,v in pairs(link) do result[k]=v end;result.render=path;return result
   end
   function w:verify() assert(mode~='identity_changed','Identity changed') end
-  function w:convert() converted=converted+1;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
+  function w:convert() converted=converted+1;if mode=='convert_stall' then for _=1,1000 do coroutine.yield() end end;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
   function w:show() shown=shown+1;return true end
   local fs={probes=0}
-  function fs:close_monitor()end
-  function fs:inspect(paths) local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha='old'} end;return out end
+  function fs:close_monitor()closed=closed+1 end
+  function fs:inspect(paths) if mode=='file_stall' and paths[1]=='C:\\original.wav' then for _=1,1000 do coroutine.yield() end end;local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha='old'} end;return out end
   function fs:begin_inspect(paths) return {paths=paths} end
   function fs:poll(job)
     self.probes=self.probes+1
@@ -46,7 +47,7 @@ local function scenario(mode)
   package.loaded['relay.worker']=nil;package.preload['relay.worker']=function()return ''end
   local I=setmetatable({Cond_FirstUseEver=1,TabItemFlags_SetSelected=1},{__index=function()return function()end end})
   I.CreateContext=function()return {}end
-  I.Begin=function()return true,true end
+  I.Begin=function()ui_frames=ui_frames+1;return true,true end
   I.BeginTabBar=function()return true end
   I.BeginTabItem=function()return true end
   I.Button=function(_,name) if name==click then click=nil;return true end;return false end
@@ -79,18 +80,32 @@ local function scenario(mode)
   end
   assert(not startup_message,'Unexpected startup error: '..tostring(startup_message))
   assert(next_frame,'Startup must reach the panel with native APIs only')
-  click='Connect to Wwise';next_frame()
-  if mode=='fresh_setup' then click='Use this project';next_frame() end
-  toggle=true;next_frame()
+  local function frames(n) for _=1,n do next_frame() end end
+  click='Connect to Wwise';frames(5)
+  if mode=='connect_stall' then
+    local before=ui_frames;frames(100);assert(ui_frames==before+100 and replaced==0)
+    click='Stop waiting';frames(2);assert(closed>0 and table.concat(messages,'\n'):find('Stopped waiting',1,true))
+    exit_cb();total=total+1;return
+  end
+  if mode=='fresh_setup' then click='Use this project';frames(3) end
+  toggle=true;frames(3)
   if mode=='unknown' then report='FILE:C:\\unlinked.wav;' end
   if mode=='competing_outputs' then report='FILE:C:\\one\\render.wav;FILE:C:\\two\\render.wav;' end
   if mode=='new_filename' then report='FILE:C:\\new.wav;' end
   if mode=='mixed' then report='FILE:C:\\render.wav;FILE:C:\\unknown.wav;' end
-  for _,t in ipairs({2,2.1,3.6,3.7,4.2,4.3,4.4,6,8,10,12,14}) do now=t;next_frame() end
+  for _,t in ipairs({2,2.1,3.6,3.7,4.2,4.3,4.4,6,8,10,12,14}) do now=t;frames(10) end
   local text=table.concat(messages,'\n')
+  if mode=='convert_stall' or mode=='file_stall' then
+    local before=ui_frames;frames(100);assert(ui_frames==before+100)
+    assert(not text:find('Wwise audio updated',1,true))
+    assert(replaced==(mode=='convert_stall' and 1 or 0))
+    click='Stop waiting';frames(2);assert(closed>0)
+    local count=replaced;frames(50);assert(replaced==count,'Stopped task resumed a replacement')
+    exit_cb();total=total+1;return
+  end
   if mode=='success' or mode=='legacy_profile' or mode=='new_filename' or mode=='fresh_setup' or mode=='temporary_lock' then
     assert(replaced==1 and converted==1 and text:find('Wwise audio updated',1,true))
-    click='Show in Wwise';next_frame();assert(shown==1,'Show must target successful container')
+    click='Show in Wwise';frames(3);assert(shown==1,'Show must target successful container')
   elseif mode=='inspection_failure' then
     assert(replaced==0 and converted==0 and text:find('WAV is locked or unreadable',1,true) and text:find('Updates paused',1,true))
   elseif mode=='mixed' then
@@ -103,5 +118,5 @@ local function scenario(mode)
   assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
+for _,mode in ipairs({'connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
 return total

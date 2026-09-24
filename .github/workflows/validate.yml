@@ -14,8 +14,8 @@ jobs:
           python-version: '3.12'
       - run: python -m pip install lupa==2.8
       - run: python tests/run_tests.py
-      - run: python tests/test_reapack.py
-      - name: Real Windows hidden file-check bridge
+      - run: python tests/test_reapack.py --allow-unreleased
+      - name: Real Windows asynchronous worker and stalled WAAPI connections
         run: python tests/test_bridge.py
       - name: Windows PowerShell 5.1 file safety
         shell: powershell

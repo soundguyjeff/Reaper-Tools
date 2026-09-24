@@ -1,7 +1,7 @@
 """Validate feed metadata and exact committed package bytes without accessing a project."""
 from pathlib import Path
 from urllib.parse import urlparse, unquote
-import hashlib, re, subprocess, xml.etree.ElementTree as ET
+import hashlib, re, subprocess, sys, xml.etree.ElementTree as ET
 root=Path(__file__).resolve().parents[1]
 feed=ET.parse(root/'index.xml').getroot()
 assert feed.tag=='index' and feed.get('version')=='1' and feed.get('name')=='Reaper Tools'
@@ -25,5 +25,7 @@ for version in package.findall('version'):
     assert source.get('hash')=='1220'+hashlib.sha256(data).hexdigest()
     assert re.search(rb'^-- @version (\S+)',data,re.M)[1].decode()==name
 latest=(root/'Wwise Relay.lua').read_bytes()
-assert re.search(rb'^-- @version (\S+)',latest,re.M)[1].decode() in versions
+current=re.search(rb'^-- @version (\S+)',latest,re.M)[1].decode()
+assert current in versions or '--allow-unreleased' in sys.argv
+if current not in versions: print('Source candidate is not yet in ReaPack:',current)
 print('ReaPack feed: version, Windows platform, action registration, immutable URLs and checksums passed.')

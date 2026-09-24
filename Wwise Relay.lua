@@ -1,12 +1,15 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.2.4
+-- @version 0.3.0
 -- @author Reaper Tools
--- @about Windows; Wwise 2024.1.1; requires ReaWwise and ReaImGui 0.9.3+.
+-- @about Windows; Wwise 2024.1.1; requires ReaImGui 0.9.3+, Windows Script Host and PowerShell 5.1.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- No Wwise objects are created, no audio is imported, no WAV backups are made.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.2.4', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.3.0', SECTION = 'WwiseRelay' }
+
+-- Optional frame budget installed by the panel; tests and non-UI use need no hook.
+function M.checkpoint() if M.yield_hook then M.yield_hook() end end
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -46,6 +49,7 @@ function M.decode(s)
   local function str()
     assert(s:sub(i,i)=='"','Expected JSON string');i=i+1;local out={}
     while i<=n do
+      if i%2048==0 then M.checkpoint() end
       local c=s:sub(i,i);i=i+1
       if c=='"' then return table.concat(out) end
       if c=='\\' then
@@ -64,6 +68,7 @@ function M.decode(s)
     error('Unclosed string')
   end
   value=function()
+    M.checkpoint()
     depth=depth+1;assert(depth<64,'JSON too deep');ws();local c=s:sub(i,i);local v
     if c=='"' then v=str()
     elseif c=='{' or c=='[' then
@@ -114,6 +119,7 @@ function M.match_sound(path,sounds)
   if not name then return nil,'Expected a local rendered WAV filename.' end
   local found
   for _,sound in ipairs(sounds) do
+    M.checkpoint()
     if sound.type=='Sound' and type(sound.name)=='string' and sound.name:lower()==name:lower() then
       if found then return nil,'More than one Wwise Sound is named "'..name..'"; no audio was changed for this file.' end
       found=sound
@@ -149,7 +155,7 @@ function M.validate_link(link,live,all_sources,project_id,project_path)
   assert(live.language=='SFX','Only SFX sources are supported in this release')
   assert(M.key(link.original)~=M.key(link.render),'Render and original paths must differ')
   local count=0
-  for _,s in ipairs(all_sources) do if M.key(s.original)==M.key(link.original) then count=count+1;assert(s.id==link.source_id,'Original WAV is shared by another Wwise source') end end
+  for _,s in ipairs(all_sources) do M.checkpoint(); if M.key(s.original)==M.key(link.original) then count=count+1;assert(s.id==link.source_id,'Original WAV is shared by another Wwise source') end end
   assert(count==1,'Could not verify exclusive ownership of the original WAV')
   return true
 end
@@ -199,7 +205,7 @@ local allow={
  ['ak.wwise.core.audio.convert']=true,['ak.wwise.ui.commands.execute']=true,
  ['ak.wwise.ui.bringToForeground']=true,
 }
-function M.new(r,port) return setmetatable({r=r,port=port or 8080,connected=false},M) end
+function M.new(r,port,backend) return setmetatable({r=r,port=port or 8080,backend=backend,connected=false},M) end
 function M:call(uri,args,options,read)
   assert(allow[uri],'Wwise operation is not permitted')
   if uri=='ak.wwise.ui.commands.execute' then assert(args.command=='FindInProjectExplorerSyncGroup1','Only navigation is permitted') end
@@ -207,37 +213,17 @@ function M:call(uri,args,options,read)
     assert(#args.objects==1 and C.guid(args.objects[1]),'Conversion must target one matched audio source')
     assert(#args.platforms==1 and #args.languages==1 and args.languages[1]=='SFX','Conversion scope is invalid')
   end
-  local r,owned=self.r,{}
-  local function own(p) if p then owned[#owned+1]=p end;return p end
-  local function encode(v)
-    if type(v)=='string' then return own(r.AK_AkVariant_String(v)) end
-    if type(v)=='boolean' then return own(r.AK_AkVariant_Bool(v)) end
-    if type(v)=='number' then return own(r.AK_AkVariant_Int(v)) end
-    assert(type(v)=='table')
-    local arr=(getmetatable(v) or {}).__array or #v>0
-    local p=own(arr and r.AK_AkJson_Array() or r.AK_AkJson_Map())
-    if arr then for _,x in ipairs(v) do assert(r.AK_AkJson_Array_Add(p,encode(x))) end
-    else for k,x in pairs(v) do assert(r.AK_AkJson_Map_Set(p,k,encode(x))) end end
-    return p
-  end
+  local data=self.backend:run({action='waapi',port=self.port,uri=uri,args=args or {},options=options or {}}).data
+  assert(type(data)=='table','Wwise returned no result object')
   local Q={}
-  function Q.get(p,k) return own(r.AK_AkJson_Map_Get(p,k)) end
-  function Q.text(p,k) local v=k and Q.get(p,k) or p;return v and r.AK_AkVariant_GetString(v) or '' end
+  function Q.get(p,k) return p and p[k] end
+  function Q.text(p,k) local v=k and Q.get(p,k) or p;return type(v)=='string' and v or '' end
   function Q.list(p,k,reader)
-    local a=k and Q.get(p,k) or p;local out={};if not a then return out end
-    for i=0,r.AK_AkJson_Array_Size(a)-1 do out[#out+1]=reader(own(r.AK_AkJson_Array_Get(a,i))) end
+    local a=k and Q.get(p,k) or p;local out={}
+    for _,v in ipairs(a or {}) do C.checkpoint();out[#out+1]=reader(v) end
     return out
   end
-  local ok,result=pcall(function()
-    local p=own(r.AK_Waapi_Call(uri,encode(args or {}),encode(options or {})))
-    assert(p,'Wwise did not respond')
-    assert(r.AK_AkJson_GetStatus(p),Q.text(p,'message')~='' and Q.text(p,'message') or ('Wwise rejected '..uri))
-    return read and read(Q,p) or true
-  end)
-  -- Clear only handles created by this call; ReaWwise is shared with other tools.
-  for i=#owned,1,-1 do pcall(r.AK_AkJson_Clear,owned[i]) end
-  if not ok then error(result,0) end
-  return result
+  return read and read(Q,data) or true
 end
 local function read_object(Q,p)
   local par=Q.get(p,'parent')
@@ -260,8 +246,7 @@ function M:project()
   return p[1]
 end
 function M:connect()
-  assert(self.r.AK_Waapi_Connect,'Install Audiokinetic ReaWwise through ReaPack, then restart REAPER')
-  assert(self.r.AK_Waapi_Connect('127.0.0.1',self.port),'Cannot connect. Enable WAAPI in Wwise preferences and check the port.')
+  self.connected=false
   local version=self:call('ak.wwise.core.getInfo',{}, {},function(Q,p)return Q.text(Q.get(p,'version'),'displayName')end)
   assert(version:match('2024%.1%.1%f[^%d]'),'This release targets the Wwise 2024.1.1 API. Connected version: '..version)
   local project=self:project()
@@ -279,7 +264,7 @@ end
 function M:sources()
   local a=self:objects({ofType={'AudioFileSource'}})
   local prefix=C.key(self.originals)..'\\sfx\\'
-  for _,s in ipairs(a) do s.language=C.key(s.original):sub(1,#prefix)==prefix and 'SFX' or 'Other' end
+  for _,s in ipairs(a) do C.checkpoint(); s.language=C.key(s.original):sub(1,#prefix)==prefix and 'SFX' or 'Other' end
   return a
 end
 function M:check_project(profile)
@@ -304,7 +289,7 @@ function M:match(path,profile,catalog)
   if not sound then return nil,reason end
   local active=self:active_source(sound.id,profile.platform)
   local source
-  for _,candidate in ipairs(catalog.sources) do if candidate.id==active then source=candidate end end
+  for _,candidate in ipairs(catalog.sources) do C.checkpoint(); if candidate.id==active then source=candidate end end
   if not source then return nil,'The matched sound has no active file-based audio source on the selected platform.' end
   local link={render=path,source_id=source.id,sound_id=sound.id,container_id=sound.parent_id,
     sound_name=sound.name,sound_path=sound.path,source_path=source.path,original=source.original,
@@ -322,7 +307,7 @@ function M:verify(link,profile)
   assert(sound.id==link.sound_id,'The matching Wwise sound changed during the update')
   assert(sound.parent_id==link.container_id,'Sound moved to another container during the update; render again')
   local live
-  for _,s in ipairs(catalog.sources) do if s.id==link.source_id then live=s end end
+  for _,s in ipairs(catalog.sources) do C.checkpoint(); if s.id==link.source_id then live=s end end
   C.validate_link(link,live,catalog.sources,profile.project_id,profile.project_path)
   assert(self:active_source(sound.id,profile.platform)==link.source_id,'Active Wwise source changed; update skipped')
   return true
@@ -387,115 +372,107 @@ function M:command(request)
   local args=' -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(script)
   return quoted(exe)..args,path,exe,args
 end
-local function result(output)
-  assert(output and output~='','Windows helper did not finish. Update status is uncertain; automatic updates have stopped.')
-  local body=output:match('^[^\r\n]*[\r\n]+(.*)$') or ''
-  body=body:gsub('^\239\187\191','')
-  local ok,data=pcall(C.decode,body)
-  assert(ok and type(data)=='table','Windows helper failed. Check PowerShell permissions. '..output:sub(1,350))
-  assert(data.ok,data.error or 'Windows file operation failed')
-  return data
+-- All waits happen in a coroutine resumed by the panel once per REAPER frame.
+-- WScript is a GUI host: launching it asynchronously creates no terminal window.
+local function js_string(value)
+  local out={'"'}
+  for _,cp in utf8.codes(value) do
+    if cp==34 then out[#out+1]='\\"'
+    elseif cp==92 then out[#out+1]='\\\\'
+    elseif cp<32 or cp>126 then
+      if cp>65535 then cp=cp-65536;out[#out+1]=string.format('\\u%04x\\u%04x',0xd800+(cp>>10),0xdc00+(cp&1023))
+      else out[#out+1]=string.format('\\u%04x',cp) end
+    else out[#out+1]=string.char(cp) end
+  end
+  out[#out+1]='"';return table.concat(out)
 end
-function M:run(request)
-  local command,path=self:command(request)
-  local output=self.r.ExecProcess(command,60000)
-  os.remove(path) -- Only our own JSON request; no WAV backups exist.
-  return result(output)
+function M:trace(message)
+  pcall(write,self.dir..'/last-operation.txt',os.date('!%Y-%m-%d %H:%M:%S UTC')..'  '..message..'\n')
+end
+function M:heartbeat()
+  if self.monitor and (not self.heartbeat_time or self.r.time_precise()-self.heartbeat_time>2) then
+    write(self.monitor.dir..'/heartbeat','alive');self.heartbeat_time=self.r.time_precise()
+  end
 end
 function M:close_monitor()
   if not self.monitor then return end
-  -- This only stops the read-only inspector; it never interrupts an audio replacement.
-  local f=io.open(self.monitor.dir..'/stop','wb');if f then f:write('stop');f:close() end
-  self.monitor=nil
+  pcall(write,self.monitor.dir..'/stop','stop');self.monitor=nil;self.active=nil
 end
 function M:start_monitor()
   if self.monitor and not exists(self.monitor.dir..'/stopped.json') then return self.monitor end
   self:close_monitor()
   local token=self.r.genGuid(''):gsub('[^%x]','')
-  assert(#token==32,'Could not create a file-check session ID')
-  local dir=self.dir..'/monitor-'..token
-  self.r.RecursiveCreateDirectory(dir,0)
-  local _,request,exe,args=self:command({action='monitor',directory=dir})
-  -- REAPER captures this short launcher. The inspector must inherit NO handles:
-  -- .NET Framework Process.Start can retain the capture pipe until the child exits.
-  -- CreateProcessW also suppresses the console at creation, before PowerShell runs.
-  local native=[==[
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-public static class RelayLauncher {
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
-  struct StartupInfo {
-    public uint cb;
-    public string reserved, desktop, title;
-    public uint x, y, xSize, ySize, xCountChars, yCountChars, fillAttribute, flags;
-    public ushort showWindow, reservedSize;
-    public IntPtr reservedBytes, stdin, stdout, stderr;
-  }
-  [StructLayout(LayoutKind.Sequential)]
-  struct ProcessInfo { public IntPtr process, thread; public uint processId, threadId; }
-  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true, ExactSpelling=true)]
-  [return: MarshalAs(UnmanagedType.Bool)]
-  static extern bool CreateProcessW(string application, StringBuilder command,
-    IntPtr processAttributes, IntPtr threadAttributes,
-    [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint flags,
-    IntPtr environment, string directory, ref StartupInfo startup, out ProcessInfo process);
-  [DllImport("kernel32.dll")]
-  [return: MarshalAs(UnmanagedType.Bool)]
-  static extern bool CloseHandle(IntPtr handle);
-  public static uint Start(string exe, string arguments) {
-    StartupInfo si = new StartupInfo(); si.cb = (uint)Marshal.SizeOf(typeof(StartupInfo));
-    ProcessInfo pi;
-    if (!CreateProcessW(exe, new StringBuilder("\"" + exe + "\"" + arguments),
-      IntPtr.Zero, IntPtr.Zero, false, 0x08000000, IntPtr.Zero, null, ref si, out pi))
-      throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-    try { return pi.processId; }
-    finally { CloseHandle(pi.thread); CloseHandle(pi.process); }
-  }
-}
-]==]
-  local launch='$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; try { Add-Type -TypeDefinition '..literal(native)..'; '
-    ..'$exe='..literal(exe)..'; $arguments='..literal(args)..'; '
-    ..'$childId=[RelayLauncher]::Start($exe,$arguments); @{ok=$true;pid=$childId}|ConvertTo-Json -Compress '
-    ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'
-  local command='"'..exe..'" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(launch)
-  local ok,data=pcall(function() return result(self.r.ExecProcess(command,10000)) end)
-  if not ok then write(dir..'/stop','stop');error(data,0) end
-  self.monitor={dir=dir,request=request,pid=data.pid}
+  assert(#token==32,'Could not create a background session ID')
+  local dir=self.dir..'/session-'..token
+  self.r.RecursiveCreateDirectory(dir,0);write(dir..'/heartbeat','alive')
+  local command,request=self:command({action='service',directory=dir})
+  local launcher=dir..'/launch.js'
+  write(launcher,'try { new ActiveXObject("WScript.Shell").Run('..js_string(command)..', 0, false); } catch(e) { '
+    ..'var f=new ActiveXObject("Scripting.FileSystemObject").CreateTextFile('..js_string(dir..'/launcher-error.txt')
+    ..',true); f.Write("Windows blocked the background launcher. Check Windows Script Host and PowerShell permissions."); f.Close(); }')
+  local exe=(os.getenv('SystemRoot') or 'C:\\Windows')..'\\System32\\wscript.exe'
+  -- Never wait on a process in the REAPER/UI thread. No PowerShell process is
+  -- directly launched here, and no native ReaWwise call runs in REAPER.
+  self.r.ExecProcess('"'..exe..'" //B //NoLogo "'..launcher..'"',-1)
+  self.monitor={dir=dir,request=request,start=self.r.time_precise()}
   return self.monitor
 end
-function M:begin_inspect(paths)
+function M:begin_request(request,timeout)
   local monitor=self:start_monitor()
+  assert(not self.active,'Background helper already has a pending request')
   self.seq=self.seq+1;local id=tostring(self.seq)
-  local request=monitor.dir..'/inbox.json'
   local temporary=monitor.dir..'/inbox.tmp'
-  assert(not exists(request),'File inspector already has a pending request')
-  write(temporary,C.json({id=id,paths=C.array(paths)}))
-  assert(os.rename(temporary,request),'Cannot submit the file inspection')
-  return {response=monitor.dir..'/response-'..id..'.json',monitor=monitor,paths=paths,start=self.r.time_precise()}
+  local limit=timeout or 35
+  write(temporary,C.json({id=id,request=request,expires=os.time()+limit-2}))
+  assert(os.rename(temporary,monitor.dir..'/inbox.json'),'Cannot submit background request')
+  local job={response=monitor.dir..'/response-'..id..'.json',monitor=monitor,start=self.r.time_precise(),timeout=limit,action=request.action}
+  self.active=job;return job
 end
-function M:poll(job)
+function M:poll_request(job)
+  assert(self.monitor==job.monitor,'Background operation stopped; its result may be uncertain. Check the original audio before retrying.')
   if exists(job.monitor.dir..'/ready') then os.remove(job.monitor.request) end
   local f=io.open(job.response,'rb')
   if not f then
+    local failed=io.open(job.monitor.dir..'/launcher-error.txt','rb')
+    if failed then local message=failed:read('*a');failed:close();error(message,0) end
     local stopped=io.open(job.monitor.dir..'/stopped.json','rb')
-    if stopped then
-      local raw=stopped:read('*a');stopped:close()
-      local ok,data=pcall(C.decode,raw)
-      error(ok and data.error or 'File inspector stopped before returning a result',0)
+    if stopped then local raw=stopped:read('*a');stopped:close();error(C.decode(raw).error or 'Background helper stopped',0) end
+    if not exists(job.monitor.dir..'/ready') then
+      assert(self.r.time_precise()-job.monitor.start<20,'Background helper did not start. Windows Script Host or PowerShell may be unavailable or blocked. Updates paused.')
     end
-    assert(self.r.time_precise()-job.start<30,'Hidden file inspector did not respond. PowerShell may be blocked; updates paused.')
+    if self.r.time_precise()-job.start>=job.timeout then
+      self:close_monitor()
+      error('Background '..job.action..' timed out. Updates paused; a replacement or conversion may already have occurred. Check Wwise before retrying.',0)
+    end
     return nil
   end
-  local raw=f:read('*a');f:close()
+  local raw=f:read('*a');f:close();os.remove(job.response);self.active=nil
+  assert(#raw<=33554432,'Background response exceeds 32 MB; updates paused')
   local ok,data=pcall(C.decode,raw)
-  assert(ok and type(data)=='table','File inspector returned an invalid response')
-  os.remove(job.response)
-  assert(data.ok,data.error or 'Inspection failed')
-  assert(type(data.items)=='table' and #data.items==#job.paths,'File inspector returned an incomplete file list')
+  assert(ok and type(data)=='table','Background helper returned invalid data')
+  assert(data.ok,data.error or 'Background operation failed')
+  return data
+end
+function M:run(request)
+  assert(coroutine.isyieldable(),'Background waits must run outside the UI callback')
+  self:trace(request.action..(request.uri and ': '..request.uri or '')..' — started')
+  local timeout=(request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
+  local job=self:begin_request(request,timeout)
+  while true do
+    coroutine.yield()
+    local data=self:poll_request(job)
+    if data then self:trace(request.action..' — completed');return data end
+  end
+end
+function M:begin_inspect(paths)
+  local job=self:begin_request({action='inspect',paths=C.array(paths),hash=false},35);job.paths=paths;return job
+end
+function M:poll(job)
+  local data=self:poll_request(job);if not data then return nil end
+  assert(type(data.items)=='table' and #data.items==#job.paths,'Background helper returned an incomplete file list')
   for i,item in ipairs(data.items) do
-    assert(C.key(item.path)==C.key(job.paths[i]),'File inspector returned a different path')
-    assert(not item.ok or type(item.stamp)=='string','File inspector returned no file timestamp')
+    assert(C.key(item.path)==C.key(job.paths[i]),'Background helper returned a different path')
+    assert(not item.ok or type(item.stamp)=='string','Background helper returned no file timestamp')
   end
   return data.items
 end
@@ -623,47 +600,16 @@ function Inspect([string]$p,[bool]$hash=$false) {
     } finally { $stream.Dispose() }
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
-function Monitor([string]$directory) {
-  $dir=[IO.Path]::GetFullPath($directory)
-  if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw 'Missing file-check session directory.' }
-  $inbox=Join-Path $dir 'inbox.json';$stop=Join-Path $dir 'stop'
-  $reason='File inspector stopped after being idle; a new session will start on the next check.'
-  try {
-    [IO.File]::WriteAllText((Join-Path $dir 'ready'),'ready')
-    $idle=[DateTime]::UtcNow
-    while (!(Test-Path -LiteralPath $stop) -and ([DateTime]::UtcNow-$idle).TotalSeconds -lt 30) {
-      if (Test-Path -LiteralPath $inbox) {
-        $message=[IO.File]::ReadAllText($inbox,[Text.Encoding]::UTF8) | ConvertFrom-Json
-        if ([string]$message.id -notmatch '^[0-9]+$' -or !$message.paths -or $message.action) { throw 'Invalid read-only inspection request.' }
-        [IO.File]::Delete($inbox)
-        # Only inspect is available in the persistent worker. It cannot replace audio.
-        $items=@(foreach ($path in $message.paths) { Inspect $path $false })
-        $json=@{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
-        $temp=Join-Path $dir ('response-'+$message.id+'.tmp')
-        $dest=Join-Path $dir ('response-'+$message.id+'.json')
-        [IO.File]::WriteAllText($temp,$json,[Text.UTF8Encoding]::new($false))
-        [IO.File]::Move($temp,$dest) # Publish a complete, unique response atomically.
-        $idle=[DateTime]::UtcNow
-      }
-      Start-Sleep -Milliseconds 100
-    }
-  } catch { $reason=$_.Exception.Message }
-  finally {
-    $json=@{error=$reason} | ConvertTo-Json -Compress
-    [IO.File]::WriteAllText((Join-Path $dir 'stopped.json'),$json,[Text.UTF8Encoding]::new($false))
-  }
-}
-
-try {
-  $req=Get-Content -LiteralPath $RequestFile -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($req.action -eq 'monitor') {
-    Monitor $req.directory
+function Invoke-Request($req) {
+  Assert-RequestAlive
+  if ($req.action -eq 'waapi') {
+    return Invoke-Waapi $req
   } elseif ($req.action -eq 'inspect') {
     $items=@(foreach ($p in $req.paths) { Inspect $p ([bool]$req.hash) })
-    @{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
+    return @{ok=$true;items=$items}
   } elseif ($req.action -eq 'artifact') {
     $p=SafePath $req.path;$f=Get-Item -LiteralPath $p
-    @{ok=$true;length=$f.Length;ticks=[string]$f.LastWriteTimeUtc.Ticks} | ConvertTo-Json -Compress
+    return @{ok=$true;length=$f.Length;ticks=[string]$f.LastWriteTimeUtc.Ticks}
   } elseif ($req.action -eq 'replace') {
     $src=SafePath $req.source;$dst=SafePath $req.destination
     if ([StringComparer]::OrdinalIgnoreCase.Equals($src,$dst)) { throw 'Source and destination must differ.' }
@@ -689,15 +635,120 @@ try {
       $original=[IO.File]::Open($dst,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
       if ((HashStream $original) -ne $req.destinationSha) { throw 'Original changed during replacement preparation.' }
       $original.Dispose();$original=$null
+      Assert-RequestAlive
       [IO.File]::Replace($temp,$dst,[System.Management.Automation.Language.NullString]::Value);$temp=$null
       $verify=Inspect $dst $true
       if (!$verify.ok -or $verify.sha -ne $sha) { throw 'Replacement occurred, but readback verification failed. Check the original WAV.' }
-      @{ok=$true;sha=$sha;stamp=$verify.stamp;channels=$wi.channels;rate=$wi.rate} | ConvertTo-Json -Compress
+      return @{ok=$true;sha=$sha;stamp=$verify.stamp;channels=$wi.channels;rate=$wi.rate}
     } finally {
       if ($null -ne $renderStream) {$renderStream.Dispose()};if ($null -ne $original) {$original.Dispose()};if ($null -ne $out) {$out.Dispose()}
       if ($null -ne $temp -and [IO.File]::Exists($temp)) { [IO.File]::Delete($temp) }
     }
   } else { throw 'Unknown helper operation.' }
+}
+
+function Assert-RequestAlive {
+  if ($script:serviceDir) {
+    $heartbeat=Get-Item -LiteralPath (Join-Path $script:serviceDir 'heartbeat') -ErrorAction SilentlyContinue
+    if ((Test-Path -LiteralPath (Join-Path $script:serviceDir 'stop')) -or
+        [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -gt $script:expires -or !$heartbeat -or
+        ([DateTime]::UtcNow-$heartbeat.LastWriteTimeUtc).TotalSeconds -gt 8) {
+      throw 'Request stopped, REAPER stopped responding, or the operation timed out before committing changes.'
+    }
+  }
+}
+function Send-Wamp([string]$json,$token) {
+  $bytes=[Text.Encoding]::UTF8.GetBytes($json)
+  $segment=[ArraySegment[byte]]::new($bytes)
+  $null=$script:socket.SendAsync($segment,[Net.WebSockets.WebSocketMessageType]::Text,$true,$token).GetAwaiter().GetResult()
+}
+function Receive-Wamp($token) {
+  $buffer=New-Object byte[] 16384;$segment=[ArraySegment[byte]]::new($buffer)
+  $stream=[IO.MemoryStream]::new()
+  try {
+    do {
+      $part=$script:socket.ReceiveAsync($segment,$token).GetAwaiter().GetResult()
+      if ($part.MessageType -ne [Net.WebSockets.WebSocketMessageType]::Text) { throw 'Wwise closed the connection or returned a non-text response.' }
+      $stream.Write($buffer,0,$part.Count)
+      if ($stream.Length -gt 33554432) { throw 'Wwise response exceeded the 32 MB limit; updates paused.' }
+    } while (!$part.EndOfMessage)
+    $message=[Text.Encoding]::UTF8.GetString($stream.ToArray()) | ConvertFrom-Json
+    return ,$message
+  } finally { $stream.Dispose() }
+}
+function Invoke-Waapi($req) {
+  $allowed=@('ak.wwise.core.object.get','ak.wwise.core.getInfo','ak.wwise.core.getProjectInfo',
+    'ak.wwise.core.audio.convert','ak.wwise.ui.commands.execute','ak.wwise.ui.bringToForeground')
+  if ($req.uri -notin $allowed) { throw 'Wwise operation is not permitted.' }
+  if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1') { throw 'Only navigation is permitted.' }
+  if ($req.uri -eq 'ak.wwise.core.audio.convert' -and
+      (@($req.args.objects).Count -ne 1 -or [string]$req.args.objects[0] -notmatch '^\{[0-9a-fA-F-]{36}\}$' -or
+       @($req.args.platforms).Count -ne 1 -or @($req.args.languages).Count -ne 1 -or $req.args.languages[0] -ne 'SFX')) { throw 'Invalid conversion scope.' }
+  $port=[int]$req.port
+  if ($port -lt 1 -or $port -gt 65535) { throw 'Invalid WAAPI port.' }
+  $ms=15000;if ($req.uri -eq 'ak.wwise.core.audio.convert') { $ms=120000 }
+  $cancel=[Threading.CancellationTokenSource]::new($ms)
+  try {
+    if (!$script:socket -or $script:socket.State -ne [Net.WebSockets.WebSocketState]::Open -or $script:socketPort -ne $port) {
+      if ($script:socket) { $script:socket.Dispose() }
+      $script:socket=[Net.WebSockets.ClientWebSocket]::new()
+      $script:socket.Options.AddSubProtocol('wamp.2.json');$script:socket.Options.Proxy=$null
+      $null=$script:socket.ConnectAsync([uri]('ws://127.0.0.1:'+ $port +'/waapi'),$cancel.Token).GetAwaiter().GetResult()
+      Send-Wamp '[1,"realm1",{"roles":{"caller":{}}}]' $cancel.Token
+      $welcome=Receive-Wamp $cancel.Token
+      if ($welcome[0] -ne 2) { throw 'Wwise did not accept the WAAPI session.' }
+      $script:socketPort=$port
+    }
+    Assert-RequestAlive
+    $script:callId++;$id=$script:callId
+    $options=$req.options | ConvertTo-Json -Depth 50 -Compress
+    $arguments=$req.args | ConvertTo-Json -Depth 50 -Compress
+    $uriJson=$req.uri | ConvertTo-Json -Compress
+    Send-Wamp ('[48,'+$id+','+$options+','+$uriJson+',[],'+$arguments+']') $cancel.Token
+    $message=Receive-Wamp $cancel.Token
+    if ($message[0] -eq 8) {
+      $why=[string]$message[4];if ($message.Count -gt 6 -and $message[6].message) { $why=[string]$message[6].message }
+      throw ('Wwise: '+$why)
+    }
+    if ($message[0] -ne 50 -or $message[1] -ne $id -or $message.Count -lt 5) { throw 'Unexpected Wwise response.' }
+    return @{ok=$true;data=$message[4]}
+  } catch {
+    if ($script:socket) { $script:socket.Abort();$script:socket.Dispose();$script:socket=$null }
+    if ($cancel.IsCancellationRequested) { throw 'Wwise response timed out. A requested conversion may still finish in Wwise; updates are paused.' }
+    throw
+  } finally { $cancel.Dispose() }
+}
+function Service([string]$directory) {
+  $script:serviceDir=[IO.Path]::GetFullPath($directory)
+  $dir=$script:serviceDir;$stop=Join-Path $dir 'stop';$inbox=Join-Path $dir 'inbox.json'
+  $reason='Background helper stopped. Connect to Wwise again.'
+  try {
+    [IO.File]::WriteAllText((Join-Path $dir 'ready'),'ready')
+    while (!(Test-Path -LiteralPath $stop)) {
+      $heartbeat=Get-Item -LiteralPath (Join-Path $dir 'heartbeat') -ErrorAction SilentlyContinue
+      if (!$heartbeat -or ([DateTime]::UtcNow-$heartbeat.LastWriteTimeUtc).TotalMinutes -gt 30) { break }
+      if (Test-Path -LiteralPath $inbox) {
+        $message=[IO.File]::ReadAllText($inbox,[Text.Encoding]::UTF8) | ConvertFrom-Json
+        if ([string]$message.id -notmatch '^[0-9]+$' -or !$message.request -or !$message.expires) { throw 'Invalid background request.' }
+        [IO.File]::Delete($inbox);$script:expires=[long]$message.expires
+        try { $answer=Invoke-Request $message.request } catch { $answer=@{ok=$false;error=$_.Exception.Message} }
+        $json=$answer | ConvertTo-Json -Depth 50 -Compress
+        $temp=Join-Path $dir ('response-'+$message.id+'.tmp');$dest=Join-Path $dir ('response-'+$message.id+'.json')
+        [IO.File]::WriteAllText($temp,$json,[Text.UTF8Encoding]::new($false));[IO.File]::Move($temp,$dest)
+      }
+      Start-Sleep -Milliseconds 40
+    }
+  } catch { $reason=$_.Exception.Message }
+  finally {
+    if ($script:socket) { $script:socket.Abort();$script:socket.Dispose();$script:socket=$null }
+    [IO.File]::WriteAllText((Join-Path $dir 'stopped.json'),(@{error=$reason}|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
+    $script:serviceDir=$null
+  }
+}
+try {
+  $req=Get-Content -LiteralPath $RequestFile -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($req.action -eq 'service') { Service $req.directory }
+  else { Invoke-Request $req | ConvertTo-Json -Depth 50 -Compress }
 } catch { @{ok=$false;error=$_.Exception.Message} | ConvertTo-Json -Compress }
 ]====] end
 
@@ -736,8 +787,8 @@ if saved~='' then
     p.links=nil;p.version=2;profile=p
   else startup_error='Saved profile could not be loaded. Set up the project again.' end
 end
-local w=W.new(r,profile.port)
 local fs=F.new(r,worker)
+local w=W.new(r,profile.port,fs)
 local s={enabled=false,status='Ready to set up',detail='Connect to Wwise and choose your project and platform.',error=startup_error,
   results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
   tab='Setup',toast='',toast_until=0,selected_container=1,last_files={}}
@@ -757,6 +808,14 @@ local function guard(fn)
   if not ok then pause(err) end
   return ok
 end
+local function schedule(fn)
+  if s.task then return end
+  s.task=coroutine.create(fn);s.working=true
+end
+local frame_deadline=0
+C.yield_hook=function()
+  if coroutine.isyieldable() and r.time_precise()>=frame_deadline then coroutine.yield() end
+end
 local function current_project()
   assert(r.EnumProjects(-1)==proj and project_identity(proj)==project_guid,'Active REAPER project changed. Return to the original project and re-enable updates.')
 end
@@ -769,7 +828,8 @@ local function matched_project(p)
 end
 local function connect()
   assert(win,'This is a Windows tool. The panel can be previewed on this Mac, but live updates are disabled.')
-  w.port=profile.port
+  w.port=profile.port;s.status='Connecting to Wwise';s.detail='Waiting for Wwise. REAPER remains available.'
+  coroutine.yield()
   local p,info=w:connect()
   if profile.project_id then assert(matched_project(p),'Open the pinned project in Wwise: '..profile.project_path) end
   s.connected_project=p;s.error=nil;s.status='Connected';s.detail='Ready to match rendered filenames to existing Wwise sounds.'
@@ -815,6 +875,8 @@ local function summary()
 end
 local function begin_batch(items)
   current_project()
+  s.status='Finding matching Wwise sounds';s.detail='Reading the pinned project in the background.'
+  coroutine.yield()
   local catalog=w:catalog(profile)
   for _,item in ipairs(items) do item.link,item.skip_reason=w:match(item.path,profile,catalog) end
   C.reject_collisions(items)
@@ -829,16 +891,20 @@ local function process_one()
     row.link=link;row.state='Failed';s.status='Updating '..C.basename(item.path);s.detail='Verifying the existing source...'
     local ok,err=pcall(function()
       w:verify(link,profile)
+      s.detail='Checking the existing original WAV...';coroutine.yield()
       local checks=fs:inspect({link.original},true)
       local original=checks[1]
       assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
       link.destination_sha=original.sha
       local previous_sha=link.destination_sha
+      s.detail='Replacing the existing WAV...';coroutine.yield()
       local replaced=fs:replace(link,item)
       row.replaced=true;row.state='Conversion failed';link.destination_sha=replaced.sha
       -- Verify identity again after replacement; never convert a new/moved object.
       w:verify(link,profile)
+      s.detail='Converting in Wwise...';coroutine.yield()
       local converted=w:convert(link,profile.platform)
+      s.detail='Checking converted media...';coroutine.yield()
       fs:artifact(converted,replaced.stamp,previous_sha==replaced.sha)
       row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media is current.'
       local have=false;for _,v in ipairs(s.containers) do if v.id==link.container_id then have=true end end
@@ -895,19 +961,21 @@ local function tick()
       s.job=nil
     end
   end
+  -- Finish the outstanding inspection before submitting any Wwise/file operation.
+  if not s.job and not s.inspect_failure then
+    local ready=s.detector:take(time)
+    if ready then begin_batch(ready);return end
+  end
   if not s.job and time>=s.next_probe then
     s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
   end
-  if s.inspect_failure then return end
-  local ready=s.detector:take(time)
-  if ready then begin_batch(ready) end
 end
 
 local green,amber,red,muted=0x95D5AEFF,0xEDC28AFF,0xEBA0A0FF,0xB0B5BEFF
 local function text(s) I.TextWrapped(ctx,tostring(s or '')) end
 local function button(label,fn,disabled)
-  I.BeginDisabled(ctx,disabled or false)
-  if I.Button(ctx,label) then guard(fn) end
+  I.BeginDisabled(ctx,disabled or s.working or false)
+  if I.Button(ctx,label) then schedule(fn) end
   I.EndDisabled(ctx)
 end
 local function render_tab()
@@ -942,7 +1010,7 @@ local function render_tab()
   end
 end
 local function setup_tab()
-  I.BeginDisabled(ctx,s.busy or s.enabled)
+  I.BeginDisabled(ctx,s.busy or s.enabled or s.working)
   local changed,port=I.InputInt(ctx,'WAAPI port',profile.port)
   if changed then profile.port=math.max(1,math.min(65535,port));save() end
   button('Connect to Wwise',connect)
@@ -968,12 +1036,16 @@ local function ui()
   local visible,open=I.Begin(ctx,'Wwise Relay',true)
   if visible then
     I.Text(ctx,profile.project_name or 'No Wwise project linked')
-    I.BeginDisabled(ctx,s.busy or not win)
+    I.BeginDisabled(ctx,s.busy or s.working or not win)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
-      if enabled then guard(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
+      if enabled then schedule(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)
+    if s.working and I.Button(ctx,'Stop waiting') then
+      s.task=nil;s.working=false;w.connected=false;s.job=nil
+      pause('Stopped waiting. A replacement or conversion already requested may have occurred. Check Wwise before reconnecting or retrying.')
+    end
     I.TextColored(ctx,muted,(w.connected and ('Connected · '..platform_name()) or 'Not connected')..'  |  v'..C.VERSION)
     if not win then I.TextColored(ctx,amber,'UI preview — live updates require Windows') end
     if I.BeginTabBar(ctx,'views') then
@@ -1001,7 +1073,14 @@ r.atexit(function()
   -- Do not disconnect ReaWwise's shared connection or clear other scripts' JSON.
 end)
 local function loop()
-  guard(tick)
+  if fs.heartbeat then fs:heartbeat() end
+  if not s.task then s.task=coroutine.create(tick) end
+  frame_deadline=r.time_precise()+0.004
+  local ok,err=coroutine.resume(s.task)
+  if not ok then
+    s.task=nil;s.working=false;w.connected=false;s.job=nil;pause(err)
+  elseif coroutine.status(s.task)=='dead' then s.task=nil;s.working=false
+  else s.working=true end
   local ok,open=pcall(ui)
   if not ok then r.MB(tostring(open),'Wwise Relay — UI error',0);return end
   if open then r.defer(loop) end

@@ -33,8 +33,8 @@ if saved~='' then
     p.links=nil;p.version=2;profile=p
   else startup_error='Saved profile could not be loaded. Set up the project again.' end
 end
-local w=W.new(r,profile.port)
 local fs=F.new(r,worker)
+local w=W.new(r,profile.port,fs)
 local s={enabled=false,status='Ready to set up',detail='Connect to Wwise and choose your project and platform.',error=startup_error,
   results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
   tab='Setup',toast='',toast_until=0,selected_container=1,last_files={}}
@@ -54,6 +54,14 @@ local function guard(fn)
   if not ok then pause(err) end
   return ok
 end
+local function schedule(fn)
+  if s.task then return end
+  s.task=coroutine.create(fn);s.working=true
+end
+local frame_deadline=0
+C.yield_hook=function()
+  if coroutine.isyieldable() and r.time_precise()>=frame_deadline then coroutine.yield() end
+end
 local function current_project()
   assert(r.EnumProjects(-1)==proj and project_identity(proj)==project_guid,'Active REAPER project changed. Return to the original project and re-enable updates.')
 end
@@ -66,7 +74,8 @@ local function matched_project(p)
 end
 local function connect()
   assert(win,'This is a Windows tool. The panel can be previewed on this Mac, but live updates are disabled.')
-  w.port=profile.port
+  w.port=profile.port;s.status='Connecting to Wwise';s.detail='Waiting for Wwise. REAPER remains available.'
+  coroutine.yield()
   local p,info=w:connect()
   if profile.project_id then assert(matched_project(p),'Open the pinned project in Wwise: '..profile.project_path) end
   s.connected_project=p;s.error=nil;s.status='Connected';s.detail='Ready to match rendered filenames to existing Wwise sounds.'
@@ -112,6 +121,8 @@ local function summary()
 end
 local function begin_batch(items)
   current_project()
+  s.status='Finding matching Wwise sounds';s.detail='Reading the pinned project in the background.'
+  coroutine.yield()
   local catalog=w:catalog(profile)
   for _,item in ipairs(items) do item.link,item.skip_reason=w:match(item.path,profile,catalog) end
   C.reject_collisions(items)
@@ -126,16 +137,20 @@ local function process_one()
     row.link=link;row.state='Failed';s.status='Updating '..C.basename(item.path);s.detail='Verifying the existing source...'
     local ok,err=pcall(function()
       w:verify(link,profile)
+      s.detail='Checking the existing original WAV...';coroutine.yield()
       local checks=fs:inspect({link.original},true)
       local original=checks[1]
       assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
       link.destination_sha=original.sha
       local previous_sha=link.destination_sha
+      s.detail='Replacing the existing WAV...';coroutine.yield()
       local replaced=fs:replace(link,item)
       row.replaced=true;row.state='Conversion failed';link.destination_sha=replaced.sha
       -- Verify identity again after replacement; never convert a new/moved object.
       w:verify(link,profile)
+      s.detail='Converting in Wwise...';coroutine.yield()
       local converted=w:convert(link,profile.platform)
+      s.detail='Checking converted media...';coroutine.yield()
       fs:artifact(converted,replaced.stamp,previous_sha==replaced.sha)
       row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media is current.'
       local have=false;for _,v in ipairs(s.containers) do if v.id==link.container_id then have=true end end
@@ -192,19 +207,21 @@ local function tick()
       s.job=nil
     end
   end
+  -- Finish the outstanding inspection before submitting any Wwise/file operation.
+  if not s.job and not s.inspect_failure then
+    local ready=s.detector:take(time)
+    if ready then begin_batch(ready);return end
+  end
   if not s.job and time>=s.next_probe then
     s.job=fs:begin_inspect(files);s.job.report=report;s.next_probe=time+1.5;s.last_stats=report;s.last_files=files
   end
-  if s.inspect_failure then return end
-  local ready=s.detector:take(time)
-  if ready then begin_batch(ready) end
 end
 
 local green,amber,red,muted=0x95D5AEFF,0xEDC28AFF,0xEBA0A0FF,0xB0B5BEFF
 local function text(s) I.TextWrapped(ctx,tostring(s or '')) end
 local function button(label,fn,disabled)
-  I.BeginDisabled(ctx,disabled or false)
-  if I.Button(ctx,label) then guard(fn) end
+  I.BeginDisabled(ctx,disabled or s.working or false)
+  if I.Button(ctx,label) then schedule(fn) end
   I.EndDisabled(ctx)
 end
 local function render_tab()
@@ -239,7 +256,7 @@ local function render_tab()
   end
 end
 local function setup_tab()
-  I.BeginDisabled(ctx,s.busy or s.enabled)
+  I.BeginDisabled(ctx,s.busy or s.enabled or s.working)
   local changed,port=I.InputInt(ctx,'WAAPI port',profile.port)
   if changed then profile.port=math.max(1,math.min(65535,port));save() end
   button('Connect to Wwise',connect)
@@ -265,12 +282,16 @@ local function ui()
   local visible,open=I.Begin(ctx,'Wwise Relay',true)
   if visible then
     I.Text(ctx,profile.project_name or 'No Wwise project linked')
-    I.BeginDisabled(ctx,s.busy or not win)
+    I.BeginDisabled(ctx,s.busy or s.working or not win)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
-      if enabled then guard(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
+      if enabled then schedule(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)
+    if s.working and I.Button(ctx,'Stop waiting') then
+      s.task=nil;s.working=false;w.connected=false;s.job=nil
+      pause('Stopped waiting. A replacement or conversion already requested may have occurred. Check Wwise before reconnecting or retrying.')
+    end
     I.TextColored(ctx,muted,(w.connected and ('Connected · '..platform_name()) or 'Not connected')..'  |  v'..C.VERSION)
     if not win then I.TextColored(ctx,amber,'UI preview — live updates require Windows') end
     if I.BeginTabBar(ctx,'views') then
@@ -298,7 +319,14 @@ r.atexit(function()
   -- Do not disconnect ReaWwise's shared connection or clear other scripts' JSON.
 end)
 local function loop()
-  guard(tick)
+  if fs.heartbeat then fs:heartbeat() end
+  if not s.task then s.task=coroutine.create(tick) end
+  frame_deadline=r.time_precise()+0.004
+  local ok,err=coroutine.resume(s.task)
+  if not ok then
+    s.task=nil;s.working=false;w.connected=false;s.job=nil;pause(err)
+  elseif coroutine.status(s.task)=='dead' then s.task=nil;s.working=false
+  else s.working=true end
   local ok,open=pcall(ui)
   if not ok then r.MB(tostring(open),'Wwise Relay — UI error',0);return end
   if open then r.defer(loop) end

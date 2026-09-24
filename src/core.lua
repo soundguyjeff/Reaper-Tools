@@ -1,4 +1,7 @@
-local M = { VERSION = '0.2.4', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.3.0', SECTION = 'WwiseRelay' }
+
+-- Optional frame budget installed by the panel; tests and non-UI use need no hook.
+function M.checkpoint() if M.yield_hook then M.yield_hook() end end
 
 function M.trim(s) return (tostring(s or ''):gsub('^%s+', ''):gsub('%s+$', '')) end
 function M.key(p)
@@ -38,6 +41,7 @@ function M.decode(s)
   local function str()
     assert(s:sub(i,i)=='"','Expected JSON string');i=i+1;local out={}
     while i<=n do
+      if i%2048==0 then M.checkpoint() end
       local c=s:sub(i,i);i=i+1
       if c=='"' then return table.concat(out) end
       if c=='\\' then
@@ -56,6 +60,7 @@ function M.decode(s)
     error('Unclosed string')
   end
   value=function()
+    M.checkpoint()
     depth=depth+1;assert(depth<64,'JSON too deep');ws();local c=s:sub(i,i);local v
     if c=='"' then v=str()
     elseif c=='{' or c=='[' then
@@ -106,6 +111,7 @@ function M.match_sound(path,sounds)
   if not name then return nil,'Expected a local rendered WAV filename.' end
   local found
   for _,sound in ipairs(sounds) do
+    M.checkpoint()
     if sound.type=='Sound' and type(sound.name)=='string' and sound.name:lower()==name:lower() then
       if found then return nil,'More than one Wwise Sound is named "'..name..'"; no audio was changed for this file.' end
       found=sound
@@ -141,7 +147,7 @@ function M.validate_link(link,live,all_sources,project_id,project_path)
   assert(live.language=='SFX','Only SFX sources are supported in this release')
   assert(M.key(link.original)~=M.key(link.render),'Render and original paths must differ')
   local count=0
-  for _,s in ipairs(all_sources) do if M.key(s.original)==M.key(link.original) then count=count+1;assert(s.id==link.source_id,'Original WAV is shared by another Wwise source') end end
+  for _,s in ipairs(all_sources) do M.checkpoint(); if M.key(s.original)==M.key(link.original) then count=count+1;assert(s.id==link.source_id,'Original WAV is shared by another Wwise source') end end
   assert(count==1,'Could not verify exclusive ownership of the original WAV')
   return true
 end

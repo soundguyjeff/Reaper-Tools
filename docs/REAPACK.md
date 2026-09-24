@@ -1,6 +1,6 @@
 # Install through ReaPack
 
-The repository includes `index.xml` with **Wwise Relay 0.2.4**, with Dropbox/cloud-file path handling, quiet background file checks, automatic filename-to-sound matching and the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
+The repository includes `index.xml` with **Wwise Relay 0.3.0**, with background Wwise connection and file operations, timeouts, Stop waiting, Dropbox/cloud-file path handling, automatic filename-to-sound matching and the startup fix for REAPER 7.78 Win64. ReaPack registers the script in REAPER's main Actions list. The package is marked for Windows x64.
 
 ## Repository URL
 
@@ -17,7 +17,7 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 3. Right-click the package, choose **Install**, then **Apply**.
 4. Run **Wwise Relay** from REAPER's Actions list.
 
-Install **ReaWwise** and **ReaImGui 0.9.3+** separately through their normal ReaPack packages. This feed contains Relay only and does not automatically install those dependencies.
+Install **ReaImGui 0.9.3+** separately through its normal ReaPack package. Windows Script Host (JScript) and Windows PowerShell 5.1 must be available. Relay 0.3.0 no longer uses ReaWwise; leave it installed if your other tools need it. This feed contains Relay only and does not automatically install those dependencies.
 
 For later updates, close Relay first, choose **ReaPack → Synchronize packages**, apply the update, then run Relay again.
 

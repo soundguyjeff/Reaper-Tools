@@ -104,47 +104,16 @@ function Inspect([string]$p,[bool]$hash=$false) {
     } finally { $stream.Dispose() }
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
-function Monitor([string]$directory) {
-  $dir=[IO.Path]::GetFullPath($directory)
-  if (!(Test-Path -LiteralPath $dir -PathType Container)) { throw 'Missing file-check session directory.' }
-  $inbox=Join-Path $dir 'inbox.json';$stop=Join-Path $dir 'stop'
-  $reason='File inspector stopped after being idle; a new session will start on the next check.'
-  try {
-    [IO.File]::WriteAllText((Join-Path $dir 'ready'),'ready')
-    $idle=[DateTime]::UtcNow
-    while (!(Test-Path -LiteralPath $stop) -and ([DateTime]::UtcNow-$idle).TotalSeconds -lt 30) {
-      if (Test-Path -LiteralPath $inbox) {
-        $message=[IO.File]::ReadAllText($inbox,[Text.Encoding]::UTF8) | ConvertFrom-Json
-        if ([string]$message.id -notmatch '^[0-9]+$' -or !$message.paths -or $message.action) { throw 'Invalid read-only inspection request.' }
-        [IO.File]::Delete($inbox)
-        # Only inspect is available in the persistent worker. It cannot replace audio.
-        $items=@(foreach ($path in $message.paths) { Inspect $path $false })
-        $json=@{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
-        $temp=Join-Path $dir ('response-'+$message.id+'.tmp')
-        $dest=Join-Path $dir ('response-'+$message.id+'.json')
-        [IO.File]::WriteAllText($temp,$json,[Text.UTF8Encoding]::new($false))
-        [IO.File]::Move($temp,$dest) # Publish a complete, unique response atomically.
-        $idle=[DateTime]::UtcNow
-      }
-      Start-Sleep -Milliseconds 100
-    }
-  } catch { $reason=$_.Exception.Message }
-  finally {
-    $json=@{error=$reason} | ConvertTo-Json -Compress
-    [IO.File]::WriteAllText((Join-Path $dir 'stopped.json'),$json,[Text.UTF8Encoding]::new($false))
-  }
-}
-
-try {
-  $req=Get-Content -LiteralPath $RequestFile -Raw -Encoding UTF8 | ConvertFrom-Json
-  if ($req.action -eq 'monitor') {
-    Monitor $req.directory
+function Invoke-Request($req) {
+  Assert-RequestAlive
+  if ($req.action -eq 'waapi') {
+    return Invoke-Waapi $req
   } elseif ($req.action -eq 'inspect') {
     $items=@(foreach ($p in $req.paths) { Inspect $p ([bool]$req.hash) })
-    @{ok=$true;items=$items} | ConvertTo-Json -Depth 8 -Compress
+    return @{ok=$true;items=$items}
   } elseif ($req.action -eq 'artifact') {
     $p=SafePath $req.path;$f=Get-Item -LiteralPath $p
-    @{ok=$true;length=$f.Length;ticks=[string]$f.LastWriteTimeUtc.Ticks} | ConvertTo-Json -Compress
+    return @{ok=$true;length=$f.Length;ticks=[string]$f.LastWriteTimeUtc.Ticks}
   } elseif ($req.action -eq 'replace') {
     $src=SafePath $req.source;$dst=SafePath $req.destination
     if ([StringComparer]::OrdinalIgnoreCase.Equals($src,$dst)) { throw 'Source and destination must differ.' }
@@ -170,13 +139,118 @@ try {
       $original=[IO.File]::Open($dst,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
       if ((HashStream $original) -ne $req.destinationSha) { throw 'Original changed during replacement preparation.' }
       $original.Dispose();$original=$null
+      Assert-RequestAlive
       [IO.File]::Replace($temp,$dst,[System.Management.Automation.Language.NullString]::Value);$temp=$null
       $verify=Inspect $dst $true
       if (!$verify.ok -or $verify.sha -ne $sha) { throw 'Replacement occurred, but readback verification failed. Check the original WAV.' }
-      @{ok=$true;sha=$sha;stamp=$verify.stamp;channels=$wi.channels;rate=$wi.rate} | ConvertTo-Json -Compress
+      return @{ok=$true;sha=$sha;stamp=$verify.stamp;channels=$wi.channels;rate=$wi.rate}
     } finally {
       if ($null -ne $renderStream) {$renderStream.Dispose()};if ($null -ne $original) {$original.Dispose()};if ($null -ne $out) {$out.Dispose()}
       if ($null -ne $temp -and [IO.File]::Exists($temp)) { [IO.File]::Delete($temp) }
     }
   } else { throw 'Unknown helper operation.' }
+}
+
+function Assert-RequestAlive {
+  if ($script:serviceDir) {
+    $heartbeat=Get-Item -LiteralPath (Join-Path $script:serviceDir 'heartbeat') -ErrorAction SilentlyContinue
+    if ((Test-Path -LiteralPath (Join-Path $script:serviceDir 'stop')) -or
+        [DateTimeOffset]::UtcNow.ToUnixTimeSeconds() -gt $script:expires -or !$heartbeat -or
+        ([DateTime]::UtcNow-$heartbeat.LastWriteTimeUtc).TotalSeconds -gt 8) {
+      throw 'Request stopped, REAPER stopped responding, or the operation timed out before committing changes.'
+    }
+  }
+}
+function Send-Wamp([string]$json,$token) {
+  $bytes=[Text.Encoding]::UTF8.GetBytes($json)
+  $segment=[ArraySegment[byte]]::new($bytes)
+  $null=$script:socket.SendAsync($segment,[Net.WebSockets.WebSocketMessageType]::Text,$true,$token).GetAwaiter().GetResult()
+}
+function Receive-Wamp($token) {
+  $buffer=New-Object byte[] 16384;$segment=[ArraySegment[byte]]::new($buffer)
+  $stream=[IO.MemoryStream]::new()
+  try {
+    do {
+      $part=$script:socket.ReceiveAsync($segment,$token).GetAwaiter().GetResult()
+      if ($part.MessageType -ne [Net.WebSockets.WebSocketMessageType]::Text) { throw 'Wwise closed the connection or returned a non-text response.' }
+      $stream.Write($buffer,0,$part.Count)
+      if ($stream.Length -gt 33554432) { throw 'Wwise response exceeded the 32 MB limit; updates paused.' }
+    } while (!$part.EndOfMessage)
+    $message=[Text.Encoding]::UTF8.GetString($stream.ToArray()) | ConvertFrom-Json
+    return ,$message
+  } finally { $stream.Dispose() }
+}
+function Invoke-Waapi($req) {
+  $allowed=@('ak.wwise.core.object.get','ak.wwise.core.getInfo','ak.wwise.core.getProjectInfo',
+    'ak.wwise.core.audio.convert','ak.wwise.ui.commands.execute','ak.wwise.ui.bringToForeground')
+  if ($req.uri -notin $allowed) { throw 'Wwise operation is not permitted.' }
+  if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1') { throw 'Only navigation is permitted.' }
+  if ($req.uri -eq 'ak.wwise.core.audio.convert' -and
+      (@($req.args.objects).Count -ne 1 -or [string]$req.args.objects[0] -notmatch '^\{[0-9a-fA-F-]{36}\}$' -or
+       @($req.args.platforms).Count -ne 1 -or @($req.args.languages).Count -ne 1 -or $req.args.languages[0] -ne 'SFX')) { throw 'Invalid conversion scope.' }
+  $port=[int]$req.port
+  if ($port -lt 1 -or $port -gt 65535) { throw 'Invalid WAAPI port.' }
+  $ms=15000;if ($req.uri -eq 'ak.wwise.core.audio.convert') { $ms=120000 }
+  $cancel=[Threading.CancellationTokenSource]::new($ms)
+  try {
+    if (!$script:socket -or $script:socket.State -ne [Net.WebSockets.WebSocketState]::Open -or $script:socketPort -ne $port) {
+      if ($script:socket) { $script:socket.Dispose() }
+      $script:socket=[Net.WebSockets.ClientWebSocket]::new()
+      $script:socket.Options.AddSubProtocol('wamp.2.json');$script:socket.Options.Proxy=$null
+      $null=$script:socket.ConnectAsync([uri]('ws://127.0.0.1:'+ $port +'/waapi'),$cancel.Token).GetAwaiter().GetResult()
+      Send-Wamp '[1,"realm1",{"roles":{"caller":{}}}]' $cancel.Token
+      $welcome=Receive-Wamp $cancel.Token
+      if ($welcome[0] -ne 2) { throw 'Wwise did not accept the WAAPI session.' }
+      $script:socketPort=$port
+    }
+    Assert-RequestAlive
+    $script:callId++;$id=$script:callId
+    $options=$req.options | ConvertTo-Json -Depth 50 -Compress
+    $arguments=$req.args | ConvertTo-Json -Depth 50 -Compress
+    $uriJson=$req.uri | ConvertTo-Json -Compress
+    Send-Wamp ('[48,'+$id+','+$options+','+$uriJson+',[],'+$arguments+']') $cancel.Token
+    $message=Receive-Wamp $cancel.Token
+    if ($message[0] -eq 8) {
+      $why=[string]$message[4];if ($message.Count -gt 6 -and $message[6].message) { $why=[string]$message[6].message }
+      throw ('Wwise: '+$why)
+    }
+    if ($message[0] -ne 50 -or $message[1] -ne $id -or $message.Count -lt 5) { throw 'Unexpected Wwise response.' }
+    return @{ok=$true;data=$message[4]}
+  } catch {
+    if ($script:socket) { $script:socket.Abort();$script:socket.Dispose();$script:socket=$null }
+    if ($cancel.IsCancellationRequested) { throw 'Wwise response timed out. A requested conversion may still finish in Wwise; updates are paused.' }
+    throw
+  } finally { $cancel.Dispose() }
+}
+function Service([string]$directory) {
+  $script:serviceDir=[IO.Path]::GetFullPath($directory)
+  $dir=$script:serviceDir;$stop=Join-Path $dir 'stop';$inbox=Join-Path $dir 'inbox.json'
+  $reason='Background helper stopped. Connect to Wwise again.'
+  try {
+    [IO.File]::WriteAllText((Join-Path $dir 'ready'),'ready')
+    while (!(Test-Path -LiteralPath $stop)) {
+      $heartbeat=Get-Item -LiteralPath (Join-Path $dir 'heartbeat') -ErrorAction SilentlyContinue
+      if (!$heartbeat -or ([DateTime]::UtcNow-$heartbeat.LastWriteTimeUtc).TotalMinutes -gt 30) { break }
+      if (Test-Path -LiteralPath $inbox) {
+        $message=[IO.File]::ReadAllText($inbox,[Text.Encoding]::UTF8) | ConvertFrom-Json
+        if ([string]$message.id -notmatch '^[0-9]+$' -or !$message.request -or !$message.expires) { throw 'Invalid background request.' }
+        [IO.File]::Delete($inbox);$script:expires=[long]$message.expires
+        try { $answer=Invoke-Request $message.request } catch { $answer=@{ok=$false;error=$_.Exception.Message} }
+        $json=$answer | ConvertTo-Json -Depth 50 -Compress
+        $temp=Join-Path $dir ('response-'+$message.id+'.tmp');$dest=Join-Path $dir ('response-'+$message.id+'.json')
+        [IO.File]::WriteAllText($temp,$json,[Text.UTF8Encoding]::new($false));[IO.File]::Move($temp,$dest)
+      }
+      Start-Sleep -Milliseconds 40
+    }
+  } catch { $reason=$_.Exception.Message }
+  finally {
+    if ($script:socket) { $script:socket.Abort();$script:socket.Dispose();$script:socket=$null }
+    [IO.File]::WriteAllText((Join-Path $dir 'stopped.json'),(@{error=$reason}|ConvertTo-Json -Compress),[Text.UTF8Encoding]::new($false))
+    $script:serviceDir=$null
+  }
+}
+try {
+  $req=Get-Content -LiteralPath $RequestFile -Raw -Encoding UTF8 | ConvertFrom-Json
+  if ($req.action -eq 'service') { Service $req.directory }
+  else { Invoke-Request $req | ConvertTo-Json -Depth 50 -Compress }
 } catch { @{ok=$false;error=$_.Exception.Message} | ConvertTo-Json -Compress }

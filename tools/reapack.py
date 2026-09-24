@@ -29,7 +29,7 @@ def main():
     description=meta.find('description')
     if description is None: description=ET.SubElement(meta,'description')
     description.text=(r'{\rtf1\ansi Wwise Relay for Windows x64.\par '
-        r'Requires REAPER 7, ReaWwise, ReaImGui 0.9.3+ and Wwise 2024.1.1.\par '
+        r'Requires REAPER 7, ReaImGui 0.9.3+, Wwise 2024.1.1, Windows Script Host and PowerShell 5.1.\par '
         r'Automatically matches WAV filenames to unique existing Sound names. No manual audio links, new objects or WAV backups.\par '
         r'Test build: verify your NVK render groups before relying on batch coverage.}')
     release=package.find(f"version[@name='{version}']")
@@ -42,6 +42,7 @@ def main():
         ET.SubElement(release,'source',main='main',platform='win64',hash=digest).text=url
         changes={
             '0.1.1':'Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.',
+            '0.3.0':'Move Wwise connection, WAAPI calls and all audio file operations into a background helper. Add timeouts, Stop waiting and cooperative panel processing. Remove synchronous ReaWwise dependency. Requires Windows Script Host and PowerShell 5.1.',
             '0.2.4':'Allow Windows Cloud Files markers in render/original paths while still rejecting actual symbolic links, junctions and unknown reparse tags. Report the exact unsupported path component.',
             '0.2.3':'Suppress Windows PowerShell first-use progress output in the hidden launcher. Includes persistent console-free file inspection and visible WAV errors.',
             '0.2.2':'Fix the Windows inspector startup hang by launching without inherited handles. Retain quiet persistent inspection and visible WAV errors.',

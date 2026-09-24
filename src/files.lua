@@ -36,115 +36,107 @@ function M:command(request)
   local args=' -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(script)
   return quoted(exe)..args,path,exe,args
 end
-local function result(output)
-  assert(output and output~='','Windows helper did not finish. Update status is uncertain; automatic updates have stopped.')
-  local body=output:match('^[^\r\n]*[\r\n]+(.*)$') or ''
-  body=body:gsub('^\239\187\191','')
-  local ok,data=pcall(C.decode,body)
-  assert(ok and type(data)=='table','Windows helper failed. Check PowerShell permissions. '..output:sub(1,350))
-  assert(data.ok,data.error or 'Windows file operation failed')
-  return data
+-- All waits happen in a coroutine resumed by the panel once per REAPER frame.
+-- WScript is a GUI host: launching it asynchronously creates no terminal window.
+local function js_string(value)
+  local out={'"'}
+  for _,cp in utf8.codes(value) do
+    if cp==34 then out[#out+1]='\\"'
+    elseif cp==92 then out[#out+1]='\\\\'
+    elseif cp<32 or cp>126 then
+      if cp>65535 then cp=cp-65536;out[#out+1]=string.format('\\u%04x\\u%04x',0xd800+(cp>>10),0xdc00+(cp&1023))
+      else out[#out+1]=string.format('\\u%04x',cp) end
+    else out[#out+1]=string.char(cp) end
+  end
+  out[#out+1]='"';return table.concat(out)
 end
-function M:run(request)
-  local command,path=self:command(request)
-  local output=self.r.ExecProcess(command,60000)
-  os.remove(path) -- Only our own JSON request; no WAV backups exist.
-  return result(output)
+function M:trace(message)
+  pcall(write,self.dir..'/last-operation.txt',os.date('!%Y-%m-%d %H:%M:%S UTC')..'  '..message..'\n')
+end
+function M:heartbeat()
+  if self.monitor and (not self.heartbeat_time or self.r.time_precise()-self.heartbeat_time>2) then
+    write(self.monitor.dir..'/heartbeat','alive');self.heartbeat_time=self.r.time_precise()
+  end
 end
 function M:close_monitor()
   if not self.monitor then return end
-  -- This only stops the read-only inspector; it never interrupts an audio replacement.
-  local f=io.open(self.monitor.dir..'/stop','wb');if f then f:write('stop');f:close() end
-  self.monitor=nil
+  pcall(write,self.monitor.dir..'/stop','stop');self.monitor=nil;self.active=nil
 end
 function M:start_monitor()
   if self.monitor and not exists(self.monitor.dir..'/stopped.json') then return self.monitor end
   self:close_monitor()
   local token=self.r.genGuid(''):gsub('[^%x]','')
-  assert(#token==32,'Could not create a file-check session ID')
-  local dir=self.dir..'/monitor-'..token
-  self.r.RecursiveCreateDirectory(dir,0)
-  local _,request,exe,args=self:command({action='monitor',directory=dir})
-  -- REAPER captures this short launcher. The inspector must inherit NO handles:
-  -- .NET Framework Process.Start can retain the capture pipe until the child exits.
-  -- CreateProcessW also suppresses the console at creation, before PowerShell runs.
-  local native=[==[
-using System;
-using System.Text;
-using System.Runtime.InteropServices;
-public static class RelayLauncher {
-  [StructLayout(LayoutKind.Sequential, CharSet=CharSet.Unicode)]
-  struct StartupInfo {
-    public uint cb;
-    public string reserved, desktop, title;
-    public uint x, y, xSize, ySize, xCountChars, yCountChars, fillAttribute, flags;
-    public ushort showWindow, reservedSize;
-    public IntPtr reservedBytes, stdin, stdout, stderr;
-  }
-  [StructLayout(LayoutKind.Sequential)]
-  struct ProcessInfo { public IntPtr process, thread; public uint processId, threadId; }
-  [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true, ExactSpelling=true)]
-  [return: MarshalAs(UnmanagedType.Bool)]
-  static extern bool CreateProcessW(string application, StringBuilder command,
-    IntPtr processAttributes, IntPtr threadAttributes,
-    [MarshalAs(UnmanagedType.Bool)] bool inheritHandles, uint flags,
-    IntPtr environment, string directory, ref StartupInfo startup, out ProcessInfo process);
-  [DllImport("kernel32.dll")]
-  [return: MarshalAs(UnmanagedType.Bool)]
-  static extern bool CloseHandle(IntPtr handle);
-  public static uint Start(string exe, string arguments) {
-    StartupInfo si = new StartupInfo(); si.cb = (uint)Marshal.SizeOf(typeof(StartupInfo));
-    ProcessInfo pi;
-    if (!CreateProcessW(exe, new StringBuilder("\"" + exe + "\"" + arguments),
-      IntPtr.Zero, IntPtr.Zero, false, 0x08000000, IntPtr.Zero, null, ref si, out pi))
-      throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
-    try { return pi.processId; }
-    finally { CloseHandle(pi.thread); CloseHandle(pi.process); }
-  }
-}
-]==]
-  local launch='$ErrorActionPreference="Stop"; $ProgressPreference="SilentlyContinue"; try { Add-Type -TypeDefinition '..literal(native)..'; '
-    ..'$exe='..literal(exe)..'; $arguments='..literal(args)..'; '
-    ..'$childId=[RelayLauncher]::Start($exe,$arguments); @{ok=$true;pid=$childId}|ConvertTo-Json -Compress '
-    ..'} catch { @{ok=$false;error=$_.Exception.Message}|ConvertTo-Json -Compress }'
-  local command='"'..exe..'" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand '..encoded(launch)
-  local ok,data=pcall(function() return result(self.r.ExecProcess(command,10000)) end)
-  if not ok then write(dir..'/stop','stop');error(data,0) end
-  self.monitor={dir=dir,request=request,pid=data.pid}
+  assert(#token==32,'Could not create a background session ID')
+  local dir=self.dir..'/session-'..token
+  self.r.RecursiveCreateDirectory(dir,0);write(dir..'/heartbeat','alive')
+  local command,request=self:command({action='service',directory=dir})
+  local launcher=dir..'/launch.js'
+  write(launcher,'try { new ActiveXObject("WScript.Shell").Run('..js_string(command)..', 0, false); } catch(e) { '
+    ..'var f=new ActiveXObject("Scripting.FileSystemObject").CreateTextFile('..js_string(dir..'/launcher-error.txt')
+    ..',true); f.Write("Windows blocked the background launcher. Check Windows Script Host and PowerShell permissions."); f.Close(); }')
+  local exe=(os.getenv('SystemRoot') or 'C:\\Windows')..'\\System32\\wscript.exe'
+  -- Never wait on a process in the REAPER/UI thread. No PowerShell process is
+  -- directly launched here, and no native ReaWwise call runs in REAPER.
+  self.r.ExecProcess('"'..exe..'" //B //NoLogo "'..launcher..'"',-1)
+  self.monitor={dir=dir,request=request,start=self.r.time_precise()}
   return self.monitor
 end
-function M:begin_inspect(paths)
+function M:begin_request(request,timeout)
   local monitor=self:start_monitor()
+  assert(not self.active,'Background helper already has a pending request')
   self.seq=self.seq+1;local id=tostring(self.seq)
-  local request=monitor.dir..'/inbox.json'
   local temporary=monitor.dir..'/inbox.tmp'
-  assert(not exists(request),'File inspector already has a pending request')
-  write(temporary,C.json({id=id,paths=C.array(paths)}))
-  assert(os.rename(temporary,request),'Cannot submit the file inspection')
-  return {response=monitor.dir..'/response-'..id..'.json',monitor=monitor,paths=paths,start=self.r.time_precise()}
+  local limit=timeout or 35
+  write(temporary,C.json({id=id,request=request,expires=os.time()+limit-2}))
+  assert(os.rename(temporary,monitor.dir..'/inbox.json'),'Cannot submit background request')
+  local job={response=monitor.dir..'/response-'..id..'.json',monitor=monitor,start=self.r.time_precise(),timeout=limit,action=request.action}
+  self.active=job;return job
 end
-function M:poll(job)
+function M:poll_request(job)
+  assert(self.monitor==job.monitor,'Background operation stopped; its result may be uncertain. Check the original audio before retrying.')
   if exists(job.monitor.dir..'/ready') then os.remove(job.monitor.request) end
   local f=io.open(job.response,'rb')
   if not f then
+    local failed=io.open(job.monitor.dir..'/launcher-error.txt','rb')
+    if failed then local message=failed:read('*a');failed:close();error(message,0) end
     local stopped=io.open(job.monitor.dir..'/stopped.json','rb')
-    if stopped then
-      local raw=stopped:read('*a');stopped:close()
-      local ok,data=pcall(C.decode,raw)
-      error(ok and data.error or 'File inspector stopped before returning a result',0)
+    if stopped then local raw=stopped:read('*a');stopped:close();error(C.decode(raw).error or 'Background helper stopped',0) end
+    if not exists(job.monitor.dir..'/ready') then
+      assert(self.r.time_precise()-job.monitor.start<20,'Background helper did not start. Windows Script Host or PowerShell may be unavailable or blocked. Updates paused.')
     end
-    assert(self.r.time_precise()-job.start<30,'Hidden file inspector did not respond. PowerShell may be blocked; updates paused.')
+    if self.r.time_precise()-job.start>=job.timeout then
+      self:close_monitor()
+      error('Background '..job.action..' timed out. Updates paused; a replacement or conversion may already have occurred. Check Wwise before retrying.',0)
+    end
     return nil
   end
-  local raw=f:read('*a');f:close()
+  local raw=f:read('*a');f:close();os.remove(job.response);self.active=nil
+  assert(#raw<=33554432,'Background response exceeds 32 MB; updates paused')
   local ok,data=pcall(C.decode,raw)
-  assert(ok and type(data)=='table','File inspector returned an invalid response')
-  os.remove(job.response)
-  assert(data.ok,data.error or 'Inspection failed')
-  assert(type(data.items)=='table' and #data.items==#job.paths,'File inspector returned an incomplete file list')
+  assert(ok and type(data)=='table','Background helper returned invalid data')
+  assert(data.ok,data.error or 'Background operation failed')
+  return data
+end
+function M:run(request)
+  assert(coroutine.isyieldable(),'Background waits must run outside the UI callback')
+  self:trace(request.action..(request.uri and ': '..request.uri or '')..' — started')
+  local timeout=(request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
+  local job=self:begin_request(request,timeout)
+  while true do
+    coroutine.yield()
+    local data=self:poll_request(job)
+    if data then self:trace(request.action..' — completed');return data end
+  end
+end
+function M:begin_inspect(paths)
+  local job=self:begin_request({action='inspect',paths=C.array(paths),hash=false},35);job.paths=paths;return job
+end
+function M:poll(job)
+  local data=self:poll_request(job);if not data then return nil end
+  assert(type(data.items)=='table' and #data.items==#job.paths,'Background helper returned an incomplete file list')
   for i,item in ipairs(data.items) do
-    assert(C.key(item.path)==C.key(job.paths[i]),'File inspector returned a different path')
-    assert(not item.ok or type(item.stamp)=='string','File inspector returned no file timestamp')
+    assert(C.key(item.path)==C.key(job.paths[i]),'Background helper returned a different path')
+    assert(not item.ok or type(item.stamp)=='string','Background helper returned no file timestamp')
   end
   return data.items
 end
