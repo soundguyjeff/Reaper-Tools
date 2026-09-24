@@ -1,0 +1,509 @@
+{
+  "collection": "Jeff",
+  "packages": [
+    {
+      "file": "Jeff/100 HPF.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "100 HPF",
+      "requirements": [
+        "ReaEQ",
+        "Saved REAPER FX preset: Jeff - 100 HPF (not included)"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "fab310cfdc327971ffbd42a1b967a83524ef69743d4067b6019c56ae4a40be19"
+    },
+    {
+      "file": "Jeff/140 HPF.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "140 HPF",
+      "requirements": [
+        "ReaEQ",
+        "Saved REAPER FX preset: Jeff - 140 HPF (not included)"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "969c6b992076cd078d4d7afde3c85024b291030e295c5eeb03ff13ccc15f376e"
+    },
+    {
+      "file": "Jeff/8k LPF.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "8k LPF",
+      "requirements": [
+        "ReaEQ",
+        "Saved REAPER FX preset: Jeff - 8k LPF (not included)"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "66feb37e9650e169ce650c872f75701c944627657d464d1d4dc2cf6de92b93f9"
+    },
+    {
+      "file": "Jeff/HPF LPF.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "HPF LPF",
+      "requirements": [
+        "ReaEQ",
+        "Saved REAPER FX preset: Jeff - HPF LPF (not included)"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "3cdd76a5893504c3a3ac65b5d6f702bb41254e4d3fc2bdc512c15a232153563e"
+    },
+    {
+      "file": "Jeff/Hi Boost.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Hi Boost",
+      "requirements": [
+        "ReaEQ",
+        "Saved REAPER FX preset: Jeff - Hi Boost (not included)"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "6ecf36c9095c4ddfe29c86de553fbeaef3554bdf517b3697ddc15c1ce710f0fa"
+    },
+    {
+      "file": "Jeff/Jeff - Exclusive Solo.lua",
+      "version": "2",
+      "author": "X-Raym",
+      "description": "Exclusive Solo",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "28b3ed31ea419c54ad50c02905df2b9dee9f9c6c249d1a039a3b4a3f12ea8e48",
+      "license": "GPL-3.0"
+    },
+    {
+      "file": "Jeff/Jeff_Copy Markers in Time Selection.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Copy Markers in Time Selection",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "06e7e31b2e136e18d12889d4c0dc6667bd24684529615d3dfb76c41e0d7f066b"
+    },
+    {
+      "file": "Jeff/Jeff_Copy Take Pan Down.lua",
+      "version": "1.5",
+      "author": "Jeff",
+      "description": "Copy Take Pan Down",
+      "requirements": [
+        "SWS extension"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "6904f869ea95f105baf97bd75e08e247ec1d31f1daca431c9596616f90cf8e1d",
+      "license": "GPL-3.0"
+    },
+    {
+      "file": "Jeff/Jeff_Custom PlayStop (PT Style).lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Custom Play/Stop (PT Style)",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "7d8ba406a7a70690327454b65a005c667f2c3f0d6be012ea0c853790b58380a4"
+    },
+    {
+      "file": "Jeff/Jeff_Duplicate Items and Markers (with Prompt).lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Duplicate Items and Markers (with Prompt)",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "8a16d430212ae2d53912e280620ca7271cbf6e10917d7b458ff75a26ac318590"
+    },
+    {
+      "file": "Jeff/Jeff_Duplicate Markers in Time Selection.lua",
+      "version": "1.7",
+      "author": "ChatGPT",
+      "description": "Duplicate Markers in Time Selection",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "180f1463839f7d7a8b7b6e14333653648713155d3980eec4dc3240353d85bb91"
+    },
+    {
+      "file": "Jeff/Jeff_Extend Time Selection to Next Item Edge.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Extend Time Selection to Next Item Edge",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "eb12835db678778e6511c283c027d02a9ea1290e95a6d9a29e345be355a57c94"
+    },
+    {
+      "file": "Jeff/Jeff_Gang Item FX Parameters - Toggle On Off.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Gang Item FX Parameters - Toggle On Off",
+      "requirements": [],
+      "notes": [
+        "Known issue: an unbounded while loop can freeze REAPER; also targets track FX rather than take FX. Repair before use."
+      ],
+      "enabled": false,
+      "imported_sha256": "80d8bd4555b52c77e934b6cab0e4367fcffe46742c6b005a61768bf4a82b94e6"
+    },
+    {
+      "file": "Jeff/Jeff_Hide All Take Envelopes.lua",
+      "version": "1.00",
+      "author": "Adapted by ChatGPT from Lokasenna's script",
+      "description": "Hide All Take Envelopes",
+      "requirements": [
+        "SWS extension"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "717d335e07d14d3ce146db24a2e07074f83f08dc1644daf260703fd80173567e",
+      "license": "GPL-3.0"
+    },
+    {
+      "file": "Jeff/Jeff_Move Edit Cursor Right (Popup).lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Move Edit Cursor Right (Popup)",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "84a9f2288db30162569cb308b2e97e703738fa6326a1cc6bfb86c3dd9a4b9bd5"
+    },
+    {
+      "file": "Jeff/Jeff_Move Edit Cursor for Media Item Top Half.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Move Edit Cursor for Media Item Top Half",
+      "requirements": [
+        "SWS extension"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "208bba80413b8ae521a6ca4d06d514f4813855224f2f82319ed8daabad843a7e"
+    },
+    {
+      "file": "Jeff/Jeff_Move Edit Cursor to End of Last Item in Selection.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Move Edit Cursor to End of Last Item in Selection",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "f9a6b6ed1acd924241b7cfe8f82265c4c05932211bd8f3bb72fb8434472f293e"
+    },
+    {
+      "file": "Jeff/Jeff_Move Edit Cursor to Start of Selection.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Move Edit Cursor to Start of Selection",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "d840179ba4a86bd281296ddd43b2725cf6485e05016ed812dbe7da89b7d55413"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Edit Cursor Left - 1 Frame.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Edit Cursor Left - 1 Frame",
+      "requirements": [],
+      "notes": [
+        "Known issue: calls Snap_GetGrid, which is not a native REAPER API. Needs repair before use."
+      ],
+      "enabled": false,
+      "imported_sha256": "b480f91c0e8765124fce30ecee9cfbf23981347d3e709a4b4e4533ef9147b3f9"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Edit Cursor Left - Saved Dialog Settings 1.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Edit Cursor Left - Saved Dialog Settings 1",
+      "requirements": [
+        "Existing SWS/Saved Nudge 1 Distance extension setting used by this local script"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "ddb03e807a78817b81194ebedceb5110b8a99781c66ff9bd5c899fb50a08ad6b"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Left - 1 Frame - PT Style.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Left - 1 Frame - PT Style",
+      "requirements": [
+        "SWS extension"
+      ],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "2abcc74223828cc6db5ef2f821c18f9fc9d11b2b37b313f74e0a2fe1b6250650"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Left - 5 Frames - PT Style.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Left - 5 Frames - PT Style",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "8f64824e8907c3fafc7d0f3cb14eaf0ac6df45572483c94e690111e099235010"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Right - 1 Frame - PT Style.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Right - 1 Frame - PT Style",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "4352ceb1a5f790d4e59c7d233c3cb91c6dd7ff9d3f363b771af3123112bd27bb"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Right - 5 Frames - PT Style.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Right - 5 Frames - PT Style",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "ff06d7a645487e195e5541809fe4a2d957f5d3356ed1743ba1884d7db313e7bf"
+    },
+    {
+      "file": "Jeff/Jeff_Nudge Right - PT Style.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Nudge Right - PT Style",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "a1f5501680dcbad88a69b481cce212da1aabb3f7022db3bb33ffee206acdae03"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #1.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #1",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "06d256b405a16b4f117e54d83afe7b6322de876d6d720c8a018b1442d9d97294"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #10.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #10",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "5ae6c25113ad7d793c818304a3878b98139354dc0990bef4c0872b84d93dedda"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #2.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #2",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "b3336f22fa485f0787886a70db2527190dfc66a1b38cc06969ac4f34b88be582"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #3.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #3",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "d4ca9df7e7cd759895a0094ccbf784433b3a256b0112827daa0539e0eb1ae6b2"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #4.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #4",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "c7a4266fc49a61ef997a7b6edaa335282ca95d50a791160d5ddaeabbc118b00e"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #5.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #5",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "6ca0a1f1654d2fe93eb1c5e00c36e88f695dddda9d226de21885e2eeffa9d624"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #6.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #6",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "d8c8b47866ac73f39e098125229affaf44dda6065c00c155187eeadb65eaaa15"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #7.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #7",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "2688601532039bba6a8f0def8228727600bcf428117ba815aa74b4f303544781"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #8.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #8",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "747ab6ed0911d11a3cf1741470b2ae9ce99b58185edc9aec6e22a302617a7e67"
+    },
+    {
+      "file": "Jeff/Jeff_Recall Temp Marker #9.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Recall Temp Marker #9",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "0304934b00d38de3238658a213d3510b94b6582c543c1b302b48606c93349f97"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #1.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #1",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "51df4a5394bd74f0012d646754bf4e93a780ce9fffb765b3897f1e6fa246788b"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #10.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #10",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "7709804d2287dc1110cecc5495143ad8397eff8ac933176df898ff1e86dd6609"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #2.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #2",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "92173a30d807cf77305dd885737589a09bd6df1bddd592cb6ee89948c146a575"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #3.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #3",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "ebe0cc1447e8b1470364f6b59ceec34730ca6d3dcd6e959712206be2ed7c5548"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #4.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #4",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "c8241a5b2f285cfd832f214f4422fb3df1376c2193447040a3ddf50c0b545782"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #5.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #5",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "f525483208526f903224c515b27de0d08540a1fa05ec9b24c5ac09eeb0f37ecc"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #6.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #6",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "aed41c1d1846c961db9f6fbfb89a345e1ac4eecb792414a7b8707218cf177668"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #7.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #7",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "dd3f38b69b7949729ef6b5bb71aa1cbc6a6b37f6d7e8d4f7388d6b6014b76ab7"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #8.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #8",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "b334fda9d4e7d42cabda6239356e9100506bdd2af83f1c726c93ab313c07c9ea"
+    },
+    {
+      "file": "Jeff/Jeff_Save Temp Marker #9.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Save Temp Marker #9",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "33a5a302056e20d6de1ceaa1e53bdd88ec2b7321d00ff95874e82dcd61edfa42"
+    },
+    {
+      "file": "Jeff/Jeff_Toggle_FXItem_Window.lua",
+      "version": "1.0",
+      "author": "Jeff",
+      "description": "Toggle_FXItem_Window",
+      "requirements": [],
+      "notes": [],
+      "enabled": true,
+      "imported_sha256": "95c99662fc5e6222707de7fd201deed1eb51c8760fbd9ed0e800ba06c5c330f7"
+    },
+    {
+      "file": "Jeff/Toggle Width.lua",
+      "version": "1.0",
+      "author": "ChatGPT",
+      "description": "Toggle Width",
+      "requirements": [],
+      "notes": [
+        "Known issue: calls CreateTrackEnvelope and GetSetEnvelopeName, which are not native REAPER APIs. Needs repair before use."
+      ],
+      "enabled": false,
+      "imported_sha256": "d855df6010040525e8c637df22d215dc0588b02327343be0973590ea3d66f377"
+    }
+  ]
+}

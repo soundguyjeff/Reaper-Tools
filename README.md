@@ -1,5 +1,7 @@
 # Reaper Tools
 
+**Jeff scripts:** 44 of your Lua scripts are now individually installable in ReaPack under **Reaper Tools → Jeff**. Three additional scripts are archived pending repair. [Installation, requirements and preserving existing shortcuts](docs/JEFF-SCRIPTS.md).
+
 ## Wwise Relay — v0.3.2 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.

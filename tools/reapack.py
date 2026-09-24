@@ -2,6 +2,7 @@
 """Append the committed Lua release to the ReaPack feed. Existing versions are immutable."""
 from pathlib import Path
 import hashlib, re, subprocess, xml.etree.ElementTree as ET
+from jeff_reapack import append_jeff
 
 ROOT=Path(__file__).resolve().parents[1]
 REPO='soundguyjeff/Reaper-Tools'
@@ -51,6 +52,7 @@ def main():
             '0.2.1':'Fix repeating PowerShell windows: reuse one read-only inspector created without a console. Surface failed WAV inspection details and pause instead of silently retrying forever.',
             '0.2.0':'Automatically match rendered WAV filenames to unique existing Wwise Sound names. Remove manual audio links. Skip missing, ambiguous, shared or competing targets. Keep project and platform preferences.'}
         ET.SubElement(release,'changelog').text=changes.get(version,'Updated Wwise Relay. See repository history for changes.')
+    append_jeff(root)
     ET.indent(root,space='  ')
     path.write_bytes(ET.tostring(root,encoding='utf-8',xml_declaration=True)+b'\n')
     print(f'ReaPack feed ready: Wwise Relay {version}, pinned to {commit[:8]}')

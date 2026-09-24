@@ -34,3 +34,7 @@ ReaPack needs network access for online installation and updates. Relay itself r
 Each release URL points to a fixed commit, with a SHA-256 checksum. Existing versions retain their original bytes. The initial feed intentionally omits v0.1.0 because its startup call is broken. `tools/reapack.py` retains older valid versions when appending new ones.
 
 Format reference: [ReaPack's official index specification](https://github.com/cfillion/reapack/wiki/Index-Format).
+
+## Jeff collection
+
+The same feed also provides 44 individual Lua scripts in category **Jeff**. Their original code and filenames are preserved. Three clearly broken scripts remain archived without installable packages. See [Jeff scripts](JEFF-SCRIPTS.md) for dependencies and shortcut migration notes. Installing a managed copy does not migrate shortcuts from the original `Scripts/Jeff` copy.
