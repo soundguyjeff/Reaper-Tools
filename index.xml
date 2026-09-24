@@ -50,6 +50,10 @@
         <source main="main" platform="win64" hash="12203984df8ee931ce1bd5536100c2a902ff8cde4912cb3bd1766bf7c826118828f8">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/7e55c855e59da5413d57895ea66f734c6e131cfc/Wwise%20Relay.lua</source>
         <changelog>Automatically request Wwise source-control checkout for the single matched read-only WAV. Verify it becomes writable and unchanged before replacement. Arm Update after render on startup for a verified saved project, without replaying old renders or resuming after errors.</changelog>
       </version>
+      <version name="0.3.5" author="Reaper Tools" time="2026-09-24T16:12:07-05:00">
+        <source main="main" platform="win64" hash="1220f31faf310258856d24951c22bc3aa523110c0d076c835ac38d5f2eeb40782c68">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/18ab91b2100e0d7d4f2f2200fb7c629b28982d1e/Wwise%20Relay.lua</source>
+        <changelog>Batch exact-name matching, native Wwise import and conversion for up to 128 rendered WAVs. Remove serial checkout/copy operations and repeated per-file project searches. Preserve original filenames and source identities, verify original bytes and converted media, and reduce render detection delay. Wwise handles required Perforce WAV access; Relay does not save or explicitly check out WWUs.</changelog>
+      </version>
     </reapack>
   </category>
   <category name="Jeff">

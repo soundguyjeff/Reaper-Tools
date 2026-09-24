@@ -1,5 +1,7 @@
 # Wwise Relay v0.3.5 native batching
 
+[Windows validation passed](https://github.com/soundguyjeff/Reaper-Tools/actions/runs/36060354097): existing Lua/panel/bridge/file checks and the native batch tests. Ten-file and shared-original cases use exactly 10 Wwise calls, one import and one conversion. A stale render prevents import.
+
 Live Wwise 2024.1.1 test: 10-file native batch completed in 0.638 seconds with filesystem translation for the Mac/Wine test host. Source IDs/parents/names/original paths, unrelated WAV hashes, and the set of original WAV files were preserved. No new sources or originals. The fixture contains about 20,000 synthetic Sounds. No Perforce provider/server is available, and the user's million-asset Windows project was not benchmarked.
 
 The earlier native single-file probe completed in 6 ms; a read-only WAV with automatic checkout disabled was rejected by Wwise. Therefore this release allows the native importer to obtain necessary WAV access, without separate SourceControlCheckoutWAV calls, project saves, or WWU checkout commands. It does not claim that WAV checkout can always wait until Save.
