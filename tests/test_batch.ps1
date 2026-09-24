@@ -10,7 +10,7 @@ function LoadFunctions($file,$names) {
  }
 }
 LoadFunctions (Join-Path $PSScriptRoot 'test_windows.ps1') @('Wave','Wem')
-LoadFunctions (Join-Path $PSScriptRoot '../src/windows.ps1') @('Initialize-PathInfo','Get-ReparseTag','Check-ReparseTag','SafePath','HashStream','WaveInfo','AudioHash','MediaHash','Inspect','Invoke-NativeBatch')
+LoadFunctions (Join-Path $PSScriptRoot '../src/windows.ps1') @('Initialize-PathInfo','Get-ReparseTag','Check-ReparseTag','SafePath','HashStream','WaveInfo','AudioHash','MediaHash','Inspect','Get-SoundMatchQuery','Invoke-NativeBatch')
 function Assert-RequestAlive {}
 function Id($n) {return ('{{{0:x8}-1111-1111-1111-111111111111}}' -f $n)}
 $project=Id 1;$platform=Id 2;$container=Id 3
@@ -32,7 +32,13 @@ function Invoke-Waapi($call,[switch]$ExistingSourceRefresh,[switch]$ExistingBatc
  'ak.wwise.core.object.get' {
   $a=$call.args
   if($a.from.ofType){return @{data=@{return=@(@{id=$project;filePath=$req.projectPath})}}}
-  if($a.waql -like 'from type Sound*'){return @{data=@{return=$script:sounds}}}
+  if($a.waql -like 'from search*' -or $a.waql -like 'from type Sound*'){
+   if($a.waql -notmatch 'name = "([^"]+)"$'){throw 'Missing exact-name filter'}
+   $name=$Matches[1]
+   $found=@($script:sounds | Where-Object {$_.name -eq $name})
+   if($script:mode -eq 'duplicate' -and $name -eq 'Batch_0'){$found+=@{id=(Id 998);name=$name;type='Sound'}}
+   return @{data=@{return=$found}}
+  }
   if($a.waql -like 'from type AudioFileSource*'){
    $owners=$script:sources;if($script:mode -eq 'shared'){$owners=$script:sources+@(@{id=(Id 999);originalWavFilePath=$script:sources[0].originalWavFilePath})}
    return @{data=@{return=$owners}}
@@ -60,13 +66,15 @@ function Invoke-Waapi($call,[switch]$ExistingSourceRefresh,[switch]$ExistingBatc
  }
 }
 try {
- foreach($mode in @('normal','shared')){
+ foreach($mode in @('normal','shared','duplicate')){
   $script:mode=$mode;$script:calls=@()
+  if((Get-SoundMatchQuery 'Batch_0') -ne 'from search "Batch_0" where type = "Sound" and name = "Batch_0"'){throw 'Slow name lookup'}
+  if((Get-SoundMatchQuery '火') -ne 'from type Sound where name = "火"'){throw 'Unsafe fallback for names without a search token'}
   $result=Invoke-NativeBatch $req
-  $expected=if($mode -eq 'shared'){9}else{10}
+  $expected=if($mode -in @('shared','duplicate')){9}else{10}
   if(@($result.items | Where-Object {$_.state -eq 'Converted'}).Count -ne $expected){throw ($result | ConvertTo-Json -Depth 10)}
   if(@($calls | Where-Object {$_.uri -eq 'ak.wwise.core.audio.import'}).Count -ne 1 -or @($calls | Where-Object {$_.uri -eq 'ak.wwise.core.audio.convert'}).Count -ne 1){throw 'Batch regressed to per-file calls'}
-  if($calls.Count -gt 10){throw 'Excessive Wwise round trips'}
+  if($calls.Count -gt 19){throw 'Excessive Wwise round trips'}
   Write-Host "PASS $mode batch: $expected files, one import, one conversion, $($calls.Count) total calls, no explicit checkout/save"
  }
  $script:mode='normal';$script:calls=@();$req.items[0].stamp='stale';$result=Invoke-NativeBatch $req

@@ -42,6 +42,7 @@ def main():
         release=ET.SubElement(package,'version',name=version,author='Reaper Tools',time=stamp)
         ET.SubElement(release,'source',main='main',platform='win64',hash=digest).text=url
         changes={
+            '0.3.6':'Use Wwise text search before exact Sound-name/type checks to avoid a type-wide Sound scan. Keep duplicate-name and shared-original guards; fall back safely for names without a searchable substring. Show separate matching and shared-WAV-check timings.',
             '0.3.5':'Batch exact-name matching, native Wwise import and conversion for up to 128 rendered WAVs. Remove serial checkout/copy operations and repeated per-file project searches. Preserve original filenames and source identities, verify original bytes and converted media, and reduce render detection delay. Wwise handles required Perforce WAV access; Relay does not save or explicitly check out WWUs.',
             '0.3.4':'Automatically request Wwise source-control checkout for the single matched read-only WAV. Verify it becomes writable and unchanged before replacement. Arm Update after render on startup for a verified saved project, without replaying old renders or resuming after errors.',
             '0.3.3':'Support local directory junctions and symbolic links such as C:\\Phobos. Resolve and pin real file locations, reject retargeted folders and same-file aliases, and retain existing-source and file-replacement checks.',

@@ -1,3 +1,11 @@
+# Wwise Relay v0.3.6 search matching
+
+Live Wwise 2024.1.1 read-only comparison of the production query builder: 10 requested Sound names took a median 0.0146 seconds using search versus 0.2317 seconds for the previous type-wide OR filter, over five runs. Results agree for duplicates, missing names, case differences, Unicode and punctuation. Names with no safe ASCII search substring fall back to the existing exact-name query. No cached mappings are trusted.
+
+The complete native 10-file batch took 0.393 seconds; original identities, filenames and unrelated WAVs were preserved. Tests run on the isolated Mac/Wine fixture containing about 20,000 synthetic Sounds, not millions of AudioFileSources and not Perforce. Shared-original ownership still uses a project-wide source filter and is now timed separately. This release does not establish ownership-query performance at production scale.
+
+Windows mock coverage adds duplicate-name exclusion and checks the faster query shape while retaining shared-original and changed-render exclusions. Ten distinct names now use 19 small Wwise calls, including one import and one conversion; fewer full-project filters matter more than the raw call count.
+
 # Wwise Relay v0.3.5 native batching
 
 [Windows validation passed](https://github.com/soundguyjeff/Reaper-Tools/actions/runs/36060354097): existing Lua/panel/bridge/file checks and the native batch tests. Ten-file and shared-original cases use exactly 10 Wwise calls, one import and one conversion. A stale render prevents import.

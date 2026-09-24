@@ -1,4 +1,4 @@
-# Wwise Relay v0.3.5: Windows check
+# Wwise Relay v0.3.6: Windows check
 
 No remote access or internet connection is required at runtime. These checks are manual; you do not need to run any developer commands.
 
@@ -41,3 +41,5 @@ Do not treat a successful panel notification as proof that the game played the n
 19. **Default enabled:** Restart Relay with a saved project. Confirm Update after render enables automatically without replaying the previous render; disconnect or manually pause and confirm it stays paused.
 
 20. **Native batch timing:** Render 10 small matched WAVs together; measure from render completion to conversion confirmation. Confirm one native import/conversion batch, no separate checkout UI from Relay, unchanged WWU save behavior, and unchanged unrelated audio. Repeat with a Perforce-locked WAV; report native import errors rather than success.
+
+After a 10-file render, note the separate Find and shared-WAV-check times in the result. The first measures exact Sound matching; the second includes source resolution and the shared-original guard. Report those if either remains slow.

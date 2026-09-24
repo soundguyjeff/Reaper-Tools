@@ -170,6 +170,10 @@ local function begin_batch(items)
   end
   s.pending={};s.busy=false
   summary()
+  if result.timings then
+    s.detail=s.detail..string.format('  |  Find %.2fs / shared-WAV check %.2fs',
+      result.timings.matchSeconds or 0,result.timings.ownershipSeconds or 0)
+  end
 end
 local function retry_failed()
   current_project();assert(w.connected,'Connect first')

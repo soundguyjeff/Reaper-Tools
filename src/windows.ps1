@@ -171,7 +171,18 @@ function Inspect([string]$p,[bool]$hash=$false) {
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
 # One bounded set of exact-name queries, one native import, one conversion.
+function Get-SoundMatchQuery([string]$name) {
+  if ($name -match '["\x00-\x1f]') { throw 'Unsupported characters in audio name.' }
+  # Wwise's text search narrows candidates before the exact-name/type filter.
+  # A literal ASCII substring avoids search operators, quotes and wildcard syntax.
+  $tokens=@([regex]::Matches($name,'[A-Za-z0-9_]{3,}') | ForEach-Object {$_.Value} | Sort-Object Length -Descending)
+  $filter='name = "'+$name+'"'
+  if (!$tokens.Count) {return 'from type Sound where '+$filter}
+  return 'from search "'+$tokens[0]+'" where type = "Sound" and '+$filter
+}
+
 function Invoke-NativeBatch($req) {
+  $timer=[Diagnostics.Stopwatch]::StartNew();$timings=@{}
   $entries=@($req.items)
   if (!$entries.Count -or $entries.Count -gt 128) { throw 'Native refresh supports 1-128 WAVs per render batch.' }
   function Query($queryArgs,$queryOptions) {
@@ -189,8 +200,14 @@ function Invoke-NativeBatch($req) {
   $info=(Invoke-Waapi @{port=$req.port;uri='ak.wwise.core.getProjectInfo';args=@{};options=@{};operation='Read project batch settings'}).data
   if (@($info.platforms | Where-Object {$_.id -eq $req.platform}).Count -ne 1) { throw 'Pinned conversion platform is missing.' }
   $prefix=([string]$info.directories.originals).TrimEnd('\')+'\SFX\'
-  $clauses=@($entries | ForEach-Object {'name = '+(Literal ([IO.Path]::GetFileNameWithoutExtension($_.path)))})
-  $sounds=Query @{waql=('from type Sound where '+($clauses -join ' or '))} @{return=@('id','name','type','path','parent','activeSource');platform=$req.platform}
+  $phase=$timer.Elapsed.TotalSeconds
+  $sounds=@()
+  $names=@($entries | ForEach-Object {[IO.Path]::GetFileNameWithoutExtension($_.path)} | Select-Object -Unique)
+  foreach ($name in $names) {
+    $sounds+=@(Query @{waql=(Get-SoundMatchQuery $name)} @{return=@('id','name','type','path','parent','activeSource');platform=$req.platform})
+  }
+  $timings.matchSeconds=$timer.Elapsed.TotalSeconds-$phase
+  $phase=$timer.Elapsed.TotalSeconds
   $sourceIds=@($sounds | ForEach-Object {$_.activeSource.id} | Where-Object {$_ -match '^\{[0-9a-fA-F-]{36}\}$'} | Select-Object -Unique)
   $sources=@();$owners=@()
   if ($sourceIds.Count) {
@@ -198,6 +215,7 @@ function Invoke-NativeBatch($req) {
     $paths=@($sources | Where-Object {$_.type -eq 'AudioFileSource' -and $_.originalWavFilePath} | ForEach-Object {'originalWavFilePath = '+(Literal $_.originalWavFilePath)} | Select-Object -Unique)
     if ($paths.Count) { $owners=Query @{waql=('from type AudioFileSource where '+($paths -join ' or '))} @{return=@('id','originalWavFilePath')} }
   }
+  $timings.ownershipSeconds=$timer.Elapsed.TotalSeconds-$phase
   $rows=@();$valid=@();$staging=$null;$streams=@();$importStarted=$false
   try {
     foreach ($entry in $entries) {
@@ -222,7 +240,7 @@ function Invoke-NativeBatch($req) {
       if ($collisions.Count -gt 1) {$v.row.message='Competing renders target the same source or original.';$v.collision=$true}
     }
     $valid=@($valid | Where-Object {!$_.collision})
-    if (!$valid.Count) {return @{ok=$true;items=$rows}}
+    if (!$valid.Count) {return @{ok=$true;items=$rows;timings=$timings}}
     $staging=Join-Path ([IO.Path]::GetTempPath()) ('WwiseRelayBatch-'+[guid]::NewGuid().ToString('N'))
     $null=[IO.Directory]::CreateDirectory($staging);$imports=@();$i=0
     foreach ($v in $valid) {
@@ -281,11 +299,11 @@ function Invoke-NativeBatch($req) {
       if (!$final.ok -or $final.sha -ne $v.sha) {throw 'Original changed during conversion.'}
     }
     foreach ($v in $valid) {$v.row.state='Converted';$v.row.message='Native Wwise refresh and conversion verified.'}
-    return @{ok=$true;items=$rows}
+    return @{ok=$true;items=$rows;timings=$timings}
   } catch {
     $why=$_.Exception.Message
     foreach ($v in $valid) {$v.row.state='Failed';$v.row.message=$why;if ($importStarted) {$v.row.message+=' Native import was requested; some originals may have updated.'}}
-    return @{ok=$true;items=$rows;error=$why}
+    return @{ok=$true;items=$rows;error=$why;timings=$timings}
   } finally {
     foreach ($stream in $streams) {$stream.Dispose()}
     if ($staging -and [IO.Directory]::Exists($staging)) {[IO.Directory]::Delete($staging,$true)}

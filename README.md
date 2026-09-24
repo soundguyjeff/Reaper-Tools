@@ -2,7 +2,7 @@
 
 **Jeff scripts:** 44 of your Lua scripts are now individually installable in ReaPack under **Reaper Tools → Jeff**. Three additional scripts are archived pending repair. [Installation, requirements and preserving existing shortcuts](docs/JEFF-SCRIPTS.md).
 
-## Wwise Relay — v0.3.5 Windows test build
+## Wwise Relay — v0.3.6 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -21,6 +21,12 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 ```
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
+
+### v0.3.6 — faster Sound lookup
+
+Sound matching now starts with Wwise text search, then checks the exact name and object type, instead of filtering every Sound in the project for every batch. Duplicate names still skip safely. Names without a safe searchable substring use the previous exact-name filter. No stale mapping cache or manual links are needed.
+
+A read-only comparison in the 20,000-Sound Mac fixture reduced the 10-name lookup from 0.232 seconds to 0.015 seconds (median of five runs). The complete 10-file native batch took 0.393 seconds. These are local fixture measurements, not a guarantee for the production Windows/Perforce project. The project-wide shared-original check remains; results now show separate Find and shared-WAV-check timings to identify any remaining delay.
 
 ### v0.3.5 — native batch refresh
 
