@@ -136,16 +136,17 @@ function M:match(path,profile,catalog)
   link.container_path=container.path
   return link
 end
-function M:verify(link,profile)
+function M:verify(link,profile,identity_only)
   self:check_project(profile)
-  local sound,reason=C.match_sound(link.render,self:matching_sounds(link.render))
+  local candidates=identity_only and {self:object(link.sound_id)} or self:matching_sounds(link.render)
+  local sound,reason=C.match_sound(link.render,candidates)
   assert(sound,reason)
   assert(sound.id==link.sound_id,'The matching Wwise sound changed during the update')
   assert(sound.parent_id==link.container_id,'Sound moved to another container during the update; render again')
   local live=self:object(link.source_id)
   local prefix=C.key(self.originals)..'\\sfx\\'
   live.language=C.key(live.original):sub(1,#prefix)==prefix and 'SFX' or 'Other'
-  C.validate_link(link,live,self:sources(live.original),profile.project_id,profile.project_path)
+  C.validate_link(link,live,identity_only and {live} or self:sources(live.original),profile.project_id,profile.project_path)
   assert(self:active_source(sound.id,profile.platform)==link.source_id,'Active Wwise source changed; update skipped')
   return true
 end
@@ -154,17 +155,29 @@ function M:content_hash(link,platform)
   assert(C.guid(source.content_hash),'Wwise returned no source content identity')
   return source.content_hash
 end
+function M:batch(items,profile)
+  return self.backend:run({action='batch',port=self.port,projectId=profile.project_id,
+    projectPath=profile.project_path,platform=profile.platform,items=items,operation='Refresh and convert rendered WAV batch'})
+end
+function M:transfer(link,profile,item,original)
+  return self.backend:run({action='transfer',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
+    sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
+    render=link.render,stamp=item.stamp,renderPath=item.resolvedPath,originalPath=original.resolvedPath,originalSha=original.sha,
+    operation='Native Wwise refresh'})
+end
 function M:checkout(link,profile)
   self:verify(link,profile)
   self.backend:run({action='checkout',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
     sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
     operation='Check out matched original WAV'})
 end
-function M:refresh(link,profile,previous_hash,audio_changed)
-  self:verify(link,profile)
+function M:refresh(link,profile,previous_hash,audio_changed,already_imported)
+  self:verify(link,profile,already_imported)
+  if not already_imported then
   self.backend:run({action='refresh',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
     sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
     operation='Refresh existing Wwise audio'})
+  end
   local deadline=self.r.time_precise()+10
   repeat
     local hash=self:content_hash(link,profile.platform)

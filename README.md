@@ -2,7 +2,7 @@
 
 **Jeff scripts:** 44 of your Lua scripts are now individually installable in ReaPack under **Reaper Tools → Jeff**. Three additional scripts are archived pending repair. [Installation, requirements and preserving existing shortcuts](docs/JEFF-SCRIPTS.md).
 
-## Wwise Relay — v0.3.4 Windows test build
+## Wwise Relay — v0.3.5 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -21,6 +21,14 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 ```
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
+
+### v0.3.5 — native batch refresh
+
+Rendered WAVs are matched together and sent to Wwise in one native import and one conversion request (up to 128 WAVs per batch). Relay no longer runs a separate checkout command or replaces Originals itself. Wwise's importer handles required WAV access using its configured provider, including Perforce. Relay does not save the project or explicitly check out work units. WAV access cannot be deferred if Perforce requires checkout before writing; WWU save prompts remain in Wwise.
+
+A temporary copy of each new render uses the existing original's filename, preserving differently named originals and nested folders. No old-WAV backup is made. Missing/ambiguous/shared targets are skipped; changed inputs, identities, channels and original conflicts stop the batch. Successful results require original-byte and converted-media checks.
+
+Measured 10 small WAVs at 0.64 seconds in the isolated Wwise 2024.1.1 Mac project (about 20,000 synthetic Sounds, no Perforce server). This is not a promise for a million-asset Windows project or slow Perforce server.
 
 ### v0.3.4 — automatic checkout and startup arming
 

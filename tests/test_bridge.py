@@ -91,7 +91,7 @@ class Peer:
                                 uri=req[3];a=req[5];fields=req[2].get('return',[])
                                 if uri=='ak.wwise.core.getProjectInfo':reply={'directories':{'originals':r'C:\Game\Originals'}}
                                 elif uri=='ak.wwise.core.audio.import':
-                                    assert a=={'importOperation':'useExisting','default':{'importLanguage':'SFX','importLocation':SOURCE,'originalsSubFolder':'Nested'},'imports':[{'audioFile':ORIGINAL,'objectPath':''}]},a
+                                    assert a=={'autoAddToSourceControl':False,'autoCheckOutToSourceControl':False,'importOperation':'useExisting','default':{'importLanguage':'SFX','importLocation':SOURCE,'originalsSubFolder':'Nested'},'imports':[{'audioFile':ORIGINAL,'objectPath':''}]},a
                                     reply={'files':[ORIGINAL],'objects':[{'id':SOURCE}],'log':[]}
                                     if self.mode=='refresh_error':reply['log']=[{'severity':'Error','message':'Fixture refresh failed'}]
                                     if self.mode=='refresh_wrong_result':reply['objects']=[{'id':SOUND}]

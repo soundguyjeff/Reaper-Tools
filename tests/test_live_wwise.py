@@ -6,6 +6,8 @@ from pathlib import Path
 from lupa.lua54 import LuaRuntime
 import argparse,base64,hashlib,json,os,re,shutil,subprocess,tempfile,time,uuid
 p=argparse.ArgumentParser();p.add_argument('--fixture',type=Path,required=True);p.add_argument('--powershell',required=True);p.add_argument('--port',type=int,default=8081)
+p.add_argument('--batch-only',action='store_true',help='Time and verify the 10-file native batch fixture')
+p.add_argument('--native-import',action='store_true',help='Test native refresh transfer rather than the legacy direct replacement')
 p.add_argument('--matching-only',action='store_true',help='Read-only name matching and large-project request-shape checks')
 a=p.parse_args();root=Path(__file__).resolve().parents[1];fixture=a.fixture.resolve()
 assert fixture.name=='wwise-live' and (fixture/'RelayTest/RelayTest.wproj').is_file(),'Isolated fixture required'
@@ -29,7 +31,14 @@ with tempfile.TemporaryDirectory(prefix='live-',dir=root/'work') as tmp:
     encode=lua.eval("require('relay.core').json");decode=lua.eval("require('relay.core').decode")
     def data(x):return decode(json.dumps(x,ensure_ascii=False))
     r=lua.table_from({'GetResourcePath':lambda:tmp,'RecursiveCreateDirectory':lambda path,flags:Path(path).mkdir(parents=True,exist_ok=True),'GetOS':lambda:'Win64','time_precise':time.monotonic,'genGuid':lambda _: '{'+str(uuid.uuid4())+'}','ExecProcess':execute})
-    fs=lua.eval("require('relay.files').new")(r,(root/'src/windows.ps1').read_text())
+    worker=(root/'src/windows.ps1').read_text()
+    if (a.native_import or a.batch_only) and not windows:
+        # Test-host path adapter only: Wwise/Wine uses Y: for home and Z: for root.
+        worker=worker.replace('function SafePath([string]$p) {', 'function SafePath([string]$p) {\n  if ($p.StartsWith("Y:\\")) {$p="/Users/jeff/"+$p.Substring(3).Replace("\\","/")} elseif ($p.StartsWith("Z:\\")) {$p=$p.Substring(2).Replace("\\","/")}')
+        worker=worker.replace('audioFile=$audioFile;objectPath', "audioFile=('Z:'+$audioFile.Replace('/','\\'));objectPath")
+    if a.batch_only and not windows:
+        worker=worker.replace('audioFile=$file;objectPath', "audioFile=('Z:'+$file.Replace('/','\\'));objectPath")
+    fs=lua.eval("require('relay.files').new")(r,worker)
     # Translate only filesystem requests for the Mac test environment. No production
     # resolver results, protocol responses or safety checks are simulated.
     def map_request(req):
@@ -71,6 +80,21 @@ with tempfile.TemporaryDirectory(prefix='live-',dir=root/'work') as tmp:
             with urllib.request.urlopen(req,timeout=15) as response:return json.load(response)['return']
         source_identities=identities()
         before={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in originals.rglob('*.wav')}
+        if a.batch_only:
+            paths=sorted((fixture/'batch-renders').glob('*.wav'));assert len(paths)==10
+            items=run(fs.inspect,fs,data([win(p) for p in paths]),True)
+            started=time.monotonic();result=run(w.batch,w,items,profile);elapsed=time.monotonic()-started
+            rows=[v for _,v in result['items'].items()]
+            assert len(rows)==10 and all(v['state']=='Converted' for v in rows),encode(result)
+            changed={native(v['link']['original']) for v in rows}
+            assert all(hashlib.sha256(Path(p).read_bytes()).hexdigest()==h for p,h in before.items() if p not in changed)
+            assert identities()==source_identities
+            assert {str(p) for p in originals.rglob('*.wav')}==set(before)
+            for row in rows:
+                assert Path(native(row['link']['original'])).read_bytes()==Path(row['path']).read_bytes()
+            print('PASS 10-file native batch:',round(elapsed,3),'seconds; source identities, original paths and unrelated files preserved',flush=True)
+            (fixture/'batch-timing.json').write_text(json.dumps({'files':10,'seconds':elapsed,'platform':'macOS Wwise 2024.1.1, adapted filesystem paths, no Perforce server'},indent=2))
+            raise SystemExit(0)
         catalog=run(w.catalog,w,profile)
         results={}
         for name in ['Relay_Test_01','Relay_Test_02','Relay_Unmatched','Relay_Duplicate','Relay_Unicode_火','Relay_Shared','Relay_Nested']:
@@ -103,11 +127,11 @@ with tempfile.TemporaryDirectory(prefix='live-',dir=root/'work') as tmp:
                 original=run(fs.inspect,fs,data([link['original']]),True)[1];assert original['ok'],original['error'];link['destination_sha']=original['sha']
                 rendered=run(fs.inspect,fs,data([link['render']]),True)[1];assert rendered['ok'],rendered['error']
                 previous_hash=run(w.content_hash,w,link,platform)
-                replaced=run(fs.replace,fs,link,rendered)
+                replaced=run(w.transfer,w,link,profile,rendered,original) if a.native_import else run(fs.replace,fs,link,rendered)
                 assert hashlib.sha256(destination.read_bytes()).hexdigest()==rendered['sha']
                 if take=='renders-metadata':assert not replaced['audioChanged'],'Metadata was treated as changed sample data'
                 run(w.verify,w,link,profile)
-                content_hash=run(w.refresh,w,link,profile,previous_hash,replaced['audioChanged'])
+                content_hash=run(w.refresh,w,link,profile,previous_hash,replaced['audioChanged'],a.native_import)
                 converted=run(w.convert,w,link,platform,content_hash)
                 run(fs.artifact,fs,converted,content_hash)
                 cache=Path(native(converted)).read_bytes()
@@ -135,8 +159,8 @@ with tempfile.TemporaryDirectory(prefix='live-',dir=root/'work') as tmp:
             baseline=run(w.content_hash,w,nested,platform)
             old=run(fs.inspect,fs,data([nested['original']]),True)[1];nested['destination_sha']=old['sha']
             new=run(fs.inspect,fs,data([nested['render']]),True)[1]
-            updated=run(fs.replace,fs,nested,new)
-            fresh=run(w.refresh,w,nested,profile,baseline,updated['audioChanged'])
+            updated=run(w.transfer,w,nested,profile,new,old) if a.native_import else run(fs.replace,fs,nested,new)
+            fresh=run(w.refresh,w,nested,profile,baseline,updated['audioChanged'],a.native_import)
             nested_wem=run(w.convert,w,nested,platform,fresh);run(fs.artifact,fs,nested_wem,fresh)
             assert pcm(Path(native(nested_wem)).read_bytes())==pcm(nested_render.read_bytes())
             assert identities()==source_identities,'Source objects or original paths changed'

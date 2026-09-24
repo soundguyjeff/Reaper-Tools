@@ -90,7 +90,7 @@ function M:begin_request(request,timeout)
   write(temporary,C.json({id=id,request=request,expires=os.time()+limit-2}))
   assert(os.rename(temporary,monitor.dir..'/inbox.json'),'Cannot submit background request')
   local job={response=monitor.dir..'/response-'..id..'.json',monitor=monitor,start=self.r.time_precise(),timeout=limit,action=request.action,operation=request.operation or request.uri or request.action,
-    may_change_audio=request.action=='replace' or request.action=='refresh' or request.uri=='ak.wwise.core.audio.convert'}
+    may_change_audio=request.action=='batch' or request.action=='transfer' or request.action=='replace' or request.action=='refresh' or request.uri=='ak.wwise.core.audio.convert'}
   self.active=job;return job
 end
 function M:poll_request(job)
@@ -123,7 +123,7 @@ function M:run(request)
   assert(coroutine.isyieldable(),'Background waits must run outside the UI callback')
   local operation=request.operation or request.uri or request.action
   self:trace(operation..' — started')
-  local timeout=(request.action=='checkout' or request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
+  local timeout=(request.action=='batch' or request.action=='transfer' or request.action=='checkout' or request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
   if request.uri=='ak.wwise.core.object.get' and request.args and request.args.waql then timeout=75 end
   if request.action=='refresh' then timeout=210 end
   local job=self:begin_request(request,timeout)

@@ -25,6 +25,9 @@ jobs:
       - name: Scoped source-control checkout
         shell: powershell
         run: ./tests/test_checkout.ps1
+      - name: Native batch refresh
+        shell: powershell
+        run: ./tests/test_batch.ps1
       - name: Deliverable matches sources
         shell: bash
         run: git diff --exit-code -- 'Wwise Relay.lua'

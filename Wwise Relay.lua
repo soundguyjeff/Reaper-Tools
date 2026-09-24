@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.3.4
+-- @version 0.3.5
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaImGui 0.9.3+, Windows Script Host and PowerShell 5.1.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- Only existing sources are refreshed; no new objects, audio files or WAV backups.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.3.4', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.3.5', SECTION = 'WwiseRelay' }
 
 -- Optional frame budget installed by the panel; tests and non-UI use need no hook.
 function M.checkpoint() if M.yield_hook then M.yield_hook() end end
@@ -335,16 +335,17 @@ function M:match(path,profile,catalog)
   link.container_path=container.path
   return link
 end
-function M:verify(link,profile)
+function M:verify(link,profile,identity_only)
   self:check_project(profile)
-  local sound,reason=C.match_sound(link.render,self:matching_sounds(link.render))
+  local candidates=identity_only and {self:object(link.sound_id)} or self:matching_sounds(link.render)
+  local sound,reason=C.match_sound(link.render,candidates)
   assert(sound,reason)
   assert(sound.id==link.sound_id,'The matching Wwise sound changed during the update')
   assert(sound.parent_id==link.container_id,'Sound moved to another container during the update; render again')
   local live=self:object(link.source_id)
   local prefix=C.key(self.originals)..'\\sfx\\'
   live.language=C.key(live.original):sub(1,#prefix)==prefix and 'SFX' or 'Other'
-  C.validate_link(link,live,self:sources(live.original),profile.project_id,profile.project_path)
+  C.validate_link(link,live,identity_only and {live} or self:sources(live.original),profile.project_id,profile.project_path)
   assert(self:active_source(sound.id,profile.platform)==link.source_id,'Active Wwise source changed; update skipped')
   return true
 end
@@ -353,17 +354,29 @@ function M:content_hash(link,platform)
   assert(C.guid(source.content_hash),'Wwise returned no source content identity')
   return source.content_hash
 end
+function M:batch(items,profile)
+  return self.backend:run({action='batch',port=self.port,projectId=profile.project_id,
+    projectPath=profile.project_path,platform=profile.platform,items=items,operation='Refresh and convert rendered WAV batch'})
+end
+function M:transfer(link,profile,item,original)
+  return self.backend:run({action='transfer',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
+    sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
+    render=link.render,stamp=item.stamp,renderPath=item.resolvedPath,originalPath=original.resolvedPath,originalSha=original.sha,
+    operation='Native Wwise refresh'})
+end
 function M:checkout(link,profile)
   self:verify(link,profile)
   self.backend:run({action='checkout',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
     sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
     operation='Check out matched original WAV'})
 end
-function M:refresh(link,profile,previous_hash,audio_changed)
-  self:verify(link,profile)
+function M:refresh(link,profile,previous_hash,audio_changed,already_imported)
+  self:verify(link,profile,already_imported)
+  if not already_imported then
   self.backend:run({action='refresh',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
     sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
     operation='Refresh existing Wwise audio'})
+  end
   local deadline=self.r.time_precise()+10
   repeat
     local hash=self:content_hash(link,profile.platform)
@@ -489,7 +502,7 @@ function M:begin_request(request,timeout)
   write(temporary,C.json({id=id,request=request,expires=os.time()+limit-2}))
   assert(os.rename(temporary,monitor.dir..'/inbox.json'),'Cannot submit background request')
   local job={response=monitor.dir..'/response-'..id..'.json',monitor=monitor,start=self.r.time_precise(),timeout=limit,action=request.action,operation=request.operation or request.uri or request.action,
-    may_change_audio=request.action=='replace' or request.action=='refresh' or request.uri=='ak.wwise.core.audio.convert'}
+    may_change_audio=request.action=='batch' or request.action=='transfer' or request.action=='replace' or request.action=='refresh' or request.uri=='ak.wwise.core.audio.convert'}
   self.active=job;return job
 end
 function M:poll_request(job)
@@ -522,7 +535,7 @@ function M:run(request)
   assert(coroutine.isyieldable(),'Background waits must run outside the UI callback')
   local operation=request.operation or request.uri or request.action
   self:trace(operation..' — started')
-  local timeout=(request.action=='checkout' or request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
+  local timeout=(request.action=='batch' or request.action=='transfer' or request.action=='checkout' or request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
   if request.uri=='ak.wwise.core.object.get' and request.args and request.args.waql then timeout=75 end
   if request.action=='refresh' then timeout=210 end
   local job=self:begin_request(request,timeout)
@@ -738,9 +751,132 @@ function Inspect([string]$p,[bool]$hash=$false) {
     } finally { $stream.Dispose() }
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
+# One bounded set of exact-name queries, one native import, one conversion.
+function Invoke-NativeBatch($req) {
+  $entries=@($req.items)
+  if (!$entries.Count -or $entries.Count -gt 128) { throw 'Native refresh supports 1-128 WAVs per render batch.' }
+  function Query($queryArgs,$queryOptions) {
+    return @((Invoke-Waapi @{port=$req.port;uri='ak.wwise.core.object.get';args=$queryArgs;options=$queryOptions;operation='Match rendered WAV batch'}).data.return)
+  }
+  function Literal([string]$value) {
+    if ($value -match '["\x00-\x1f]') { throw 'Unsupported characters in audio name or path.' }
+    return '"'+$value+'"'
+  }
+  function ProjectCheck {
+    $p=@(Query @{from=@{ofType=@('Project')}} @{return=@('id','filePath')})
+    if ($p.Count -ne 1 -or $p[0].id -ne $req.projectId -or $p[0].filePath -ne $req.projectPath) { throw 'Wrong Wwise project; batch stopped.' }
+  }
+  ProjectCheck
+  $info=(Invoke-Waapi @{port=$req.port;uri='ak.wwise.core.getProjectInfo';args=@{};options=@{};operation='Read project batch settings'}).data
+  if (@($info.platforms | Where-Object {$_.id -eq $req.platform}).Count -ne 1) { throw 'Pinned conversion platform is missing.' }
+  $prefix=([string]$info.directories.originals).TrimEnd('\')+'\SFX\'
+  $clauses=@($entries | ForEach-Object {'name = '+(Literal ([IO.Path]::GetFileNameWithoutExtension($_.path)))})
+  $sounds=Query @{waql=('from type Sound where '+($clauses -join ' or '))} @{return=@('id','name','type','path','parent','activeSource');platform=$req.platform}
+  $sourceIds=@($sounds | ForEach-Object {$_.activeSource.id} | Where-Object {$_ -match '^\{[0-9a-fA-F-]{36}\}$'} | Select-Object -Unique)
+  $sources=@();$owners=@()
+  if ($sourceIds.Count) {
+    $sources=Query @{from=@{id=$sourceIds}} @{return=@('id','type','parent','originalWavFilePath')}
+    $paths=@($sources | Where-Object {$_.type -eq 'AudioFileSource' -and $_.originalWavFilePath} | ForEach-Object {'originalWavFilePath = '+(Literal $_.originalWavFilePath)} | Select-Object -Unique)
+    if ($paths.Count) { $owners=Query @{waql=('from type AudioFileSource where '+($paths -join ' or '))} @{return=@('id','originalWavFilePath')} }
+  }
+  $rows=@();$valid=@();$staging=$null;$streams=@();$importStarted=$false
+  try {
+    foreach ($entry in $entries) {
+      $row=@{path=$entry.path;state='Skipped';message='No unique existing Sound matched.'};$rows+=,$row
+      $name=[IO.Path]::GetFileNameWithoutExtension($entry.path)
+      $matches=@($sounds | Where-Object {$_.name -eq $name})
+      if ($matches.Count -ne 1) {continue}
+      $sound=$matches[0];$found=@($sources | Where-Object {$_.id -eq $sound.activeSource.id -and $_.parent.id -eq $sound.id -and $_.type -eq 'AudioFileSource'})
+      if ($found.Count -ne 1) {$row.message='No active file-based source for the selected platform.';continue}
+      $source=$found[0];$original=[string]$source.originalWavFilePath
+      if (!$original.StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase)) {$row.message='Only existing SFX originals are supported.';continue}
+      $own=@($owners | Where-Object {$_.originalWavFilePath -eq $original})
+      if ($own.Count -ne 1 -or $own[0].id -ne $source.id) {$row.message='Original WAV is shared by another source.';continue}
+      $relative=$original.Substring($prefix.Length)
+      if ($relative.Split('\') -contains '..' -or $relative.Split('\') -contains '.') {throw 'Original path is not canonical.'}
+      $sub='';if ($relative.LastIndexOf('\') -ge 0) {$sub=$relative.Substring(0,$relative.LastIndexOf('\'))}
+      $row.link=@{source_id=$source.id;sound_id=$sound.id;container_id=$sound.parent.id;container_path=$sound.path.Substring(0,$sound.path.LastIndexOf('\'));original=$original}
+      $valid+=,@{entry=$entry;source=$source;sound=$sound;row=$row;original=$original;subfolder=$sub}
+    }
+    foreach ($v in $valid) {
+      $collisions=@($valid | Where-Object {$_.source.id -eq $v.source.id -or $_.original -eq $v.original})
+      if ($collisions.Count -gt 1) {$v.row.message='Competing renders target the same source or original.';$v.collision=$true}
+    }
+    $valid=@($valid | Where-Object {!$_.collision})
+    if (!$valid.Count) {return @{ok=$true;items=$rows}}
+    $staging=Join-Path ([IO.Path]::GetTempPath()) ('WwiseRelayBatch-'+[guid]::NewGuid().ToString('N'))
+    $null=[IO.Directory]::CreateDirectory($staging);$imports=@();$i=0
+    foreach ($v in $valid) {
+      $render=SafePath $v.entry.path;$dest=SafePath $v.original
+      if ($render -eq $dest) {throw 'Render and original resolve to the same WAV.'}
+      if ($v.entry.resolvedPath -and $render -ne $v.entry.resolvedPath) {throw 'Render folder changed after inspection.'}
+      $stream=[IO.File]::Open($render,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read);$streams+=,$stream
+      $f=Get-Item -LiteralPath $render -Force
+      if (([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length) -ne $v.entry.stamp) {throw 'Render changed after being queued.'}
+      $newInfo=WaveInfo $stream;$v.sha=HashStream $stream
+      $old=Inspect $v.original $true
+      if (!$old.ok) {throw $old.error}
+      if ($old.channels -ne $newInfo.channels) {throw 'Channel count changed; batch stopped before import.'}
+      $v.old=$old;$v.dest=$dest;$v.render=$render
+      $directory=Join-Path $staging ([string]$i++);$null=[IO.Directory]::CreateDirectory($directory)
+      $file=Join-Path $directory ([IO.Path]::GetFileName($dest))
+      $out=[IO.File]::Open($file,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+      try {$stream.CopyTo($out);$out.Flush($true)} finally {$out.Dispose()}
+      if ((Inspect $file $true).sha -ne $v.sha) {throw 'Staged render failed verification.'}
+      $imports+=,@{audioFile=$file;objectPath='';importLocation=$v.source.id;originalsSubFolder=$v.subfolder;importLanguage='SFX'}
+    }
+    foreach ($v in $valid) {
+      if (@($valid | Where-Object {$_.dest -eq $v.dest}).Count -ne 1 -or @($valid | Where-Object {$_.dest -eq $v.render}).Count) {throw 'Batch contains aliased originals or renders into Originals.'}
+    }
+    # Revalidate the pinned identities and originals once, immediately before import.
+    ProjectCheck
+    $ids=@($valid | ForEach-Object {$_.source.id;$_.sound.id})
+    $live=Query @{from=@{id=$ids}} @{return=@('id','type','name','parent','activeSource','originalWavFilePath');platform=$req.platform}
+    foreach ($v in $valid) {
+      $source=@($live | Where-Object {$_.id -eq $v.source.id})
+      $sound=@($live | Where-Object {$_.id -eq $v.sound.id})
+      if ($source.Count -ne 1 -or $sound.Count -ne 1 -or $source[0].type -ne 'AudioFileSource' -or $source[0].parent.id -ne $v.sound.id -or $source[0].originalWavFilePath -ne $v.original -or $sound[0].activeSource.id -ne $v.source.id -or $sound[0].name -ne $v.sound.name -or $sound[0].parent.id -ne $v.sound.parent.id) {throw 'Matched source changed before native import.'}
+      $old=Inspect $v.original $true
+      if (!$old.ok -or $old.sha -ne $v.old.sha -or $old.resolvedPath -ne $v.dest) {throw 'Original changed while preparing the batch.'}
+    }
+    Assert-RequestAlive;$importStarted=$true
+    $result=(Invoke-Waapi @{port=$req.port;uri='ak.wwise.core.audio.import';args=@{importOperation='useExisting';autoAddToSourceControl=$false;autoCheckOutToSourceControl=$true;imports=$imports};options=@{};operation='Refresh rendered WAV batch'} -ExistingSourceRefresh).data
+    if (@($result.log).Count) {throw ('Wwise import: '+(($result.log | ForEach-Object {$_.message}) -join '; '))}
+    if (@($result.objects).Count -ne $valid.Count -or @($result.files).Count -ne $valid.Count) {throw 'Wwise did not confirm the exact batch scope.'}
+    foreach ($v in $valid) {
+      if (@($result.objects | Where-Object {$_.id -eq $v.source.id}).Count -ne 1 -or @($result.files | Where-Object {$_ -eq $v.original}).Count -ne 1) {throw 'Wwise returned an unexpected source or original.'}
+      $check=Inspect $v.original $true
+      if (!$check.ok -or $check.sha -ne $v.sha) {throw 'Imported original bytes differ from the render.'}
+    }
+    $ids=@($valid | ForEach-Object {$_.source.id})
+    $converted=(Invoke-Waapi @{port=$req.port;uri='ak.wwise.core.audio.convert';args=@{objects=$ids;platforms=@($req.platform);languages=@('SFX')};options=@{};operation='Convert refreshed WAV batch'} -ExistingBatch).data
+    if ($null -eq $converted.errors -or @($converted.errors).Count) {throw ('Wwise batch conversion did not finish cleanly: '+($converted.errors | ConvertTo-Json -Compress))}
+    $after=Query @{from=@{id=$ids}} @{return=@('id','parent','originalWavFilePath','contentHash','convertedWemFilePath');platform=$req.platform}
+    foreach ($v in $valid) {
+      $item=@($after | Where-Object {$_.id -eq $v.source.id})
+      if ($item.Count -ne 1 -or $item[0].originalWavFilePath -ne $v.original -or $item[0].parent.id -ne $v.sound.id -or !$item[0].contentHash) {throw 'Source identity changed during conversion.'}
+      $artifact=SafePath $item[0].convertedWemFilePath
+      $a=[IO.File]::Open($artifact,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+      try {if ((MediaHash $a) -ne $item[0].contentHash) {throw 'Converted media does not match the refreshed source.'}} finally {$a.Dispose()}
+      $final=Inspect $v.original $true
+      if (!$final.ok -or $final.sha -ne $v.sha) {throw 'Original changed during conversion.'}
+    }
+    foreach ($v in $valid) {$v.row.state='Converted';$v.row.message='Native Wwise refresh and conversion verified.'}
+    return @{ok=$true;items=$rows}
+  } catch {
+    $why=$_.Exception.Message
+    foreach ($v in $valid) {$v.row.state='Failed';$v.row.message=$why;if ($importStarted) {$v.row.message+=' Native import was requested; some originals may have updated.'}}
+    return @{ok=$true;items=$rows;error=$why}
+  } finally {
+    foreach ($stream in $streams) {$stream.Dispose()}
+    if ($staging -and [IO.Directory]::Exists($staging)) {[IO.Directory]::Delete($staging,$true)}
+  }
+}
+
 function Invoke-Request($req) {
   Assert-RequestAlive
-  if ($req.action -in @('refresh','checkout')) {
+  if ($req.action -eq 'batch') {return Invoke-NativeBatch $req}
+  if ($req.action -in @('refresh','checkout','transfer')) {
     return Refresh-ExistingSource $req
   } elseif ($req.action -eq 'waapi') {
     return Invoke-Waapi $req
@@ -831,14 +967,14 @@ function Receive-Wamp($token) {
     return ,$message
   } finally { $stream.Dispose() }
 }
-function Invoke-Waapi($req,[switch]$ExistingSourceRefresh,[switch]$ExistingSourceCheckout) {
+function Invoke-Waapi($req,[switch]$ExistingSourceRefresh,[switch]$ExistingSourceCheckout,[switch]$ExistingBatch) {
   $allowed=@('ak.wwise.core.object.get','ak.wwise.core.getInfo','ak.wwise.core.getProjectInfo',
     'ak.wwise.core.audio.convert','ak.wwise.ui.commands.execute','ak.wwise.ui.bringToForeground')
   if ($ExistingSourceRefresh) { $allowed+='ak.wwise.core.audio.import' }
   if ($req.uri -notin $allowed) { throw 'Wwise operation is not permitted.' }
   if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1' -and !($ExistingSourceCheckout -and $req.args.command -eq 'SourceControlCheckoutWAV' -and @($req.args.objects).Count -eq 1 -and [string]$req.args.objects[0] -match '^\{[0-9a-fA-F-]{36}\}$')) { throw 'Only navigation is permitted.' }
   if ($req.uri -eq 'ak.wwise.core.audio.convert' -and
-      (@($req.args.objects).Count -ne 1 -or [string]$req.args.objects[0] -notmatch '^\{[0-9a-fA-F-]{36}\}$' -or
+      ((!$ExistingBatch -and @($req.args.objects).Count -ne 1) -or @($req.args.objects).Count -lt 1 -or @($req.args.objects).Count -gt 128 -or @($req.args.objects | Where-Object {[string]$_ -notmatch '^\{[0-9a-fA-F-]{36}\}$'}).Count -gt 0 -or
        @($req.args.platforms).Count -ne 1 -or @($req.args.languages).Count -ne 1 -or $req.args.languages[0] -ne 'SFX')) { throw 'Invalid conversion scope.' }
   $port=[int]$req.port
   if ($port -lt 1 -or $port -gt 65535) { throw 'Invalid WAAPI port.' }
@@ -922,12 +1058,47 @@ function Refresh-ExistingSource($req) {
   $separator=$relative.LastIndexOf('\');$subfolder=''
   if ($separator -ge 0) { $subfolder=$relative.Substring(0,$separator) }
   if ($relative.Split('\') -contains '..' -or $relative.Split('\') -contains '.') { throw 'Original path is not canonical.' }
-  $importArgs=@{importOperation='useExisting';default=@{importLanguage='SFX';importLocation=$req.sourceId;originalsSubFolder=$subfolder};imports=@(@{audioFile=$req.original;objectPath=''})}
+  $staging=$null;$renderStream=$null
+  $audioFile=$req.original;$newSha=$null;$changed=$false
+  try {
+  if ($req.action -eq 'transfer') {
+    $render=SafePath $req.render;$destination=SafePath $req.original
+    if ([StringComparer]::OrdinalIgnoreCase.Equals($render,$destination)) { throw 'Render and original resolve to the same file.' }
+    if (($req.renderPath -and $render -ne $req.renderPath) -or ($req.originalPath -and $destination -ne $req.originalPath)) { throw 'Linked folder changed before native refresh.' }
+    $renderStream=[IO.File]::Open($render,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    $f=Get-Item -LiteralPath $render -Force
+    if (([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length) -ne $req.stamp) { throw 'Render changed before native refresh.' }
+    $newInfo=WaveInfo $renderStream;$newSha=HashStream $renderStream;$newAudio=AudioHash $renderStream
+    $old=Inspect $req.original $true
+    if (!$old.ok -or $old.sha -ne $req.originalSha) { throw 'Original changed before native refresh.' }
+    if ($old.channels -ne $newInfo.channels) { throw 'Channel count changed; update skipped.' }
+    $changed=$newAudio -ne $old.audioSha
+    # A temporary copy of the NEW render uses the original basename. This is
+    # essential when the Sound name and original filename differ. No old WAV backup.
+    $staging=Join-Path ([IO.Path]::GetTempPath()) ('WwiseRelayImport-'+[guid]::NewGuid().ToString('N'))
+    $null=[IO.Directory]::CreateDirectory($staging)
+    $audioFile=Join-Path $staging ([IO.Path]::GetFileName($destination))
+    $out=[IO.File]::Open($audioFile,[IO.FileMode]::CreateNew,[IO.FileAccess]::Write,[IO.FileShare]::None)
+    try {$renderStream.CopyTo($out);$out.Flush($true)} finally {$out.Dispose()}
+    if ((Inspect $audioFile $true).sha -ne $newSha) { throw 'Staged render verification failed.' }
+    if ((SafePath $req.original) -ne $destination -or (Inspect $req.original $true).sha -ne $req.originalSha) { throw 'Original changed during staging.' }
+    Assert-RequestAlive
+  }
+  $importArgs=@{autoAddToSourceControl=$false;autoCheckOutToSourceControl=($req.action -eq 'transfer');importOperation='useExisting';default=@{importLanguage='SFX';importLocation=$req.sourceId;originalsSubFolder=$subfolder};imports=@(@{audioFile=$audioFile;objectPath=''})}
   $call=@{port=$req.port;uri='ak.wwise.core.audio.import';args=$importArgs;options=@{};operation='Refresh the existing Wwise source'}
   $result=(Invoke-Waapi $call -ExistingSourceRefresh).data
   if (@($result.log).Count -ne 0) { throw ('Source refresh: '+(($result.log | ForEach-Object {$_.message}) -join '; ')) }
   if (@($result.objects).Count -ne 1 -or $result.objects[0].id -ne $req.sourceId -or @($result.files).Count -ne 1 -or $result.files[0] -ne $req.original) { throw 'Wwise did not confirm the exact existing source refresh.' }
+  if ($req.action -eq 'transfer') {
+    $verify=Inspect $req.original $true
+    if (!$verify.ok -or $verify.sha -ne $newSha) { throw 'Wwise native refresh did not replace the expected original bytes. Check the Wwise import log; no success was reported.' }
+    return @{ok=$true;sha=$newSha;audioChanged=$changed}
+  }
   return @{ok=$true}
+  } finally {
+    if ($renderStream) {$renderStream.Dispose()}
+    if ($staging -and [IO.Directory]::Exists($staging)) {[IO.Directory]::Delete($staging,$true)}
+  }
 }
 function Service([string]$directory) {
   $script:serviceDir=[IO.Path]::GetFullPath($directory)
@@ -1123,62 +1294,18 @@ local function begin_batch(items)
   current_project()
   s.status='Finding matching Wwise sounds';s.detail='Reading the pinned project in the background.'
   coroutine.yield()
-  local catalog=w:catalog(profile)
-  for _,item in ipairs(items) do item.link,item.skip_reason=w:match(item.path,profile,catalog) end
-  C.reject_collisions(items)
-  s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.pending=items;s.busy=true;s.error=nil;s.toast=''
-end
-local function process_one()
-  local item=table.remove(s.pending,1);if not item then return end
-  current_project()
-  local link=item.link
-  local row={path=item.path,state='Skipped',message=item.skip_reason or 'No unambiguous existing sound matched.'};s.results[#s.results+1]=row
-  if link then
-    row.link=link;row.state='Failed';s.status='Updating '..C.basename(item.path);s.detail='Verifying the existing source...'
-    local ok,err=pcall(function()
-      w:verify(link,profile)
-      s.detail='Checking the existing original WAV...';coroutine.yield()
-      local checks=fs:inspect({link.original},true)
-      local original=checks[1]
-      assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
-      if original.readOnly then
-        s.detail='Checking out the matched WAV in Wwise...';coroutine.yield()
-        w:checkout(link,profile)
-        local checked=fs:inspect({link.original},true)[1]
-        assert(checked and checked.ok and not checked.readOnly,'Wwise original is still read-only after checkout. Check source control in Wwise, then retry.')
-        assert(checked.sha==original.sha and checked.resolvedPath==original.resolvedPath,'Original changed during checkout; render again.')
-        original=checked
-        w:verify(link,profile)
-      end
-      link.destination_sha=original.sha;link.destination_path=original.resolvedPath
-      local previous_hash=w:content_hash(link,profile.platform)
-      s.detail='Replacing the existing WAV...';coroutine.yield()
-      local replaced=fs:replace(link,item)
-      row.replaced=true;row.state='Refresh failed';link.destination_sha=replaced.sha
-      -- Verify identity again after replacement; never convert a new/moved object.
-      w:verify(link,profile)
-      s.detail='Refreshing the existing Wwise source...';coroutine.yield()
-      local content_hash=w:refresh(link,profile,previous_hash,replaced.audioChanged)
-      w:verify(link,profile)
-      row.state='Conversion failed';s.detail='Converting in Wwise...';coroutine.yield()
-      local converted=w:convert(link,profile.platform,content_hash)
-      s.detail='Checking converted media...';coroutine.yield()
-      fs:artifact(converted,content_hash)
-      local final=fs:inspect({link.original},true)[1]
-      assert(final and final.ok and final.sha==replaced.sha,'Original changed during conversion; updates paused')
-      row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media matches the refreshed source.'
-      local have=false;for _,v in ipairs(s.containers) do if v.id==link.container_id then have=true end end
-      if not have then s.containers[#s.containers+1]={id=link.container_id,path=link.container_path} end
-    end)
-    if not ok then
-      row.message=tostring(err);s.error=row.message;s.enabled=false
-      for _,remaining in ipairs(s.pending) do
-        s.results[#s.results+1]={path=remaining.path,state='Not processed',message='Paused after the preceding failure.',link=remaining.link}
-      end
-      s.pending={}
-    end
+  s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.error=nil;s.toast=''
+  s.busy=true;s.status='Refreshing rendered WAV batch';s.detail='Matching, native refresh and conversion run as one batch.'
+  local result=w:batch(items,profile)
+  s.results=result.items or {}
+  for _,row in ipairs(s.results) do
+    if row.state=='Converted' and row.link then
+      local have=false;for _,v in ipairs(s.containers) do if v.id==row.link.container_id then have=true end end
+      if not have then s.containers[#s.containers+1]={id=row.link.container_id,path=row.link.container_path} end
+    elseif row.state=='Failed' then s.error=row.message end
   end
-  if #s.pending==0 then s.busy=false;summary() end
+  s.pending={};s.busy=false
+  summary()
 end
 local function retry_failed()
   current_project();assert(w.connected,'Connect first')
@@ -1190,7 +1317,7 @@ local function retry_failed()
 end
 local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
-  if s.busy then process_one();return end
+  if s.busy then return end
   connection_tick(time)
   if s.startup_arm and w.connected and profile.project_id then
     s.startup_arm=false;enable()

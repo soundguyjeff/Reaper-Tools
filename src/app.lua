@@ -158,62 +158,18 @@ local function begin_batch(items)
   current_project()
   s.status='Finding matching Wwise sounds';s.detail='Reading the pinned project in the background.'
   coroutine.yield()
-  local catalog=w:catalog(profile)
-  for _,item in ipairs(items) do item.link,item.skip_reason=w:match(item.path,profile,catalog) end
-  C.reject_collisions(items)
-  s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.pending=items;s.busy=true;s.error=nil;s.toast=''
-end
-local function process_one()
-  local item=table.remove(s.pending,1);if not item then return end
-  current_project()
-  local link=item.link
-  local row={path=item.path,state='Skipped',message=item.skip_reason or 'No unambiguous existing sound matched.'};s.results[#s.results+1]=row
-  if link then
-    row.link=link;row.state='Failed';s.status='Updating '..C.basename(item.path);s.detail='Verifying the existing source...'
-    local ok,err=pcall(function()
-      w:verify(link,profile)
-      s.detail='Checking the existing original WAV...';coroutine.yield()
-      local checks=fs:inspect({link.original},true)
-      local original=checks[1]
-      assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
-      if original.readOnly then
-        s.detail='Checking out the matched WAV in Wwise...';coroutine.yield()
-        w:checkout(link,profile)
-        local checked=fs:inspect({link.original},true)[1]
-        assert(checked and checked.ok and not checked.readOnly,'Wwise original is still read-only after checkout. Check source control in Wwise, then retry.')
-        assert(checked.sha==original.sha and checked.resolvedPath==original.resolvedPath,'Original changed during checkout; render again.')
-        original=checked
-        w:verify(link,profile)
-      end
-      link.destination_sha=original.sha;link.destination_path=original.resolvedPath
-      local previous_hash=w:content_hash(link,profile.platform)
-      s.detail='Replacing the existing WAV...';coroutine.yield()
-      local replaced=fs:replace(link,item)
-      row.replaced=true;row.state='Refresh failed';link.destination_sha=replaced.sha
-      -- Verify identity again after replacement; never convert a new/moved object.
-      w:verify(link,profile)
-      s.detail='Refreshing the existing Wwise source...';coroutine.yield()
-      local content_hash=w:refresh(link,profile,previous_hash,replaced.audioChanged)
-      w:verify(link,profile)
-      row.state='Conversion failed';s.detail='Converting in Wwise...';coroutine.yield()
-      local converted=w:convert(link,profile.platform,content_hash)
-      s.detail='Checking converted media...';coroutine.yield()
-      fs:artifact(converted,content_hash)
-      local final=fs:inspect({link.original},true)[1]
-      assert(final and final.ok and final.sha==replaced.sha,'Original changed during conversion; updates paused')
-      row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media matches the refreshed source.'
-      local have=false;for _,v in ipairs(s.containers) do if v.id==link.container_id then have=true end end
-      if not have then s.containers[#s.containers+1]={id=link.container_id,path=link.container_path} end
-    end)
-    if not ok then
-      row.message=tostring(err);s.error=row.message;s.enabled=false
-      for _,remaining in ipairs(s.pending) do
-        s.results[#s.results+1]={path=remaining.path,state='Not processed',message='Paused after the preceding failure.',link=remaining.link}
-      end
-      s.pending={}
-    end
+  s.tab='Latest render';s.results={};s.containers={};s.selected_container=1;s.error=nil;s.toast=''
+  s.busy=true;s.status='Refreshing rendered WAV batch';s.detail='Matching, native refresh and conversion run as one batch.'
+  local result=w:batch(items,profile)
+  s.results=result.items or {}
+  for _,row in ipairs(s.results) do
+    if row.state=='Converted' and row.link then
+      local have=false;for _,v in ipairs(s.containers) do if v.id==row.link.container_id then have=true end end
+      if not have then s.containers[#s.containers+1]={id=row.link.container_id,path=row.link.container_path} end
+    elseif row.state=='Failed' then s.error=row.message end
   end
-  if #s.pending==0 then s.busy=false;summary() end
+  s.pending={};s.busy=false
+  summary()
 end
 local function retry_failed()
   current_project();assert(w.connected,'Connect first')
@@ -225,7 +181,7 @@ local function retry_failed()
 end
 local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
-  if s.busy then process_one();return end
+  if s.busy then return end
   connection_tick(time)
   if s.startup_arm and w.connected and profile.project_id then
     s.startup_arm=false;enable()

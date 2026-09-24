@@ -36,7 +36,7 @@ local function scenario(mode)
   end
   function w:verify() assert(mode~='identity_changed','Identity changed') end
   local checkout_done=false
-  function w:checkout() assert(mode~='checkout_failure','Checkout failed');checkout_done=true end
+  function w:checkout() error('Native refresh must never check out audio') end
   function w:content_hash() return id end
   function w:refresh() assert(mode~='refresh_failure','Source refresh failed');return id end
   function w:convert() converted=converted+1;if mode=='convert_stall' then for _=1,1000 do coroutine.yield() end end;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
@@ -54,8 +54,26 @@ local function scenario(mode)
     end
     return out
   end
-  function fs:replace() replaced=replaced+1;return {sha='new',stamp='2:44'} end
+  function w:transfer() replaced=replaced+1;return {sha='new',stamp='2:44'} end
   function fs:artifact() assert(mode~='stale_artifact','Stale converted media');return true end
+  function w:batch(items,p)
+    self:catalog(p)
+    for _,item in ipairs(items) do item.link,item.skip_reason=self:match(item.path) end
+    C.reject_collisions(items)
+    local rows={}
+    for _,item in ipairs(items) do
+      local row={path=item.path,state='Skipped',message=item.skip_reason,link=item.link};rows[#rows+1]=row
+      if item.link then
+        local ok,err=pcall(function()
+          self:verify(item.link,p)
+          fs:inspect({item.link.original})
+          self:transfer();self:refresh();self:convert();fs:artifact()
+        end)
+        row.state=ok and 'Converted' or 'Failed';row.message=tostring(err or 'Verified')
+      end
+    end
+    return {items=rows}
+  end
   package.loaded['relay.wwise']=nil;package.preload['relay.wwise']=function()return {new=function()return w end}end
   package.loaded['relay.files']=nil;package.preload['relay.files']=function()return {new=function()return fs end}end
   package.loaded['relay.worker']=nil;package.preload['relay.worker']=function()return ''end
@@ -159,5 +177,5 @@ local function scenario(mode)
   assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'checkout_success','checkout_failure','checkout_still_readonly','never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','refresh_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
+for _,mode in ipairs({'checkout_success','never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','refresh_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
 return total
