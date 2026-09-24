@@ -2,7 +2,7 @@
 
 **Jeff scripts:** 44 of your Lua scripts are now individually installable in ReaPack under **Reaper Tools → Jeff**. Three additional scripts are archived pending repair. [Installation, requirements and preserving existing shortcuts](docs/JEFF-SCRIPTS.md).
 
-## Wwise Relay — v0.3.3 Windows test build
+## Wwise Relay — v0.3.4 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -21,6 +21,12 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 ```
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
+
+### v0.3.4 — automatic checkout and startup arming
+
+Relay asks Wwise to check out only the matched existing WAV when it is read-only. Configure your source-control provider in Wwise first. A failed checkout, a file still read-only, or a changed original pauses the update without replacing audio. Relay never clears the read-only attribute itself.
+
+Update after render now arms automatically after connecting to the saved project and validating the platform. The existing render report is baselined, never replayed. A manual pause, error, or lost connection still requires explicit re-enabling within that session. Initial setup still requires choosing Use this project.
 
 ### v0.3.3 — linked project folders
 

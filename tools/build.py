@@ -3,7 +3,7 @@
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 header = '''-- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.3.3
+-- @version 0.3.4
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaImGui 0.9.3+, Windows Script Host and PowerShell 5.1.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.

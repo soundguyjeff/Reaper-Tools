@@ -35,7 +35,7 @@ if saved~='' then
 end
 local fs=F.new(r,worker)
 local w=W.new(r,profile.port,fs)
-local s={enabled=false,status='Waiting for Wwise',detail='Relay connects automatically. Open Wwise with WAAPI enabled.',error=startup_error,
+local s={startup_arm=true,enabled=false,status='Waiting for Wwise',detail='Relay connects automatically. Open Wwise with WAAPI enabled.',error=startup_error,
   results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
   tab='Setup',toast='',toast_until=0,selected_container=1,last_files={},
   auto_connect=true,next_connection=0,retry_delay=2,connection_status='Waiting for Wwise',connection_detail=''}
@@ -48,7 +48,7 @@ local function save() r.SetExtState(C.SECTION,key,C.json(profile),true) end
 local function toast(text) s.toast=text;s.toast_until=r.time_precise()+6 end
 local function pause(message)
   fs:close_monitor()
-  s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
+  s.startup_arm=false;s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
 end
 local function schedule(fn)
   if s.task then return end
@@ -125,7 +125,7 @@ local function pin()
     for _,p in ipairs(w.platforms) do if p.name=='Windows' then profile.platform=p.id end end
     if profile.platform=='' then profile.platform=w.platforms[1].id end
   end
-  save();toast('Project pinned. Enable updates and render as usual.')
+  save();toast('Project pinned. Relay is ready to follow renders.')
 end
 local function platform_name()
   for _,p in ipairs(w.platforms or {}) do if p.id==profile.platform then return p.name end end
@@ -176,6 +176,15 @@ local function process_one()
       local checks=fs:inspect({link.original},true)
       local original=checks[1]
       assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
+      if original.readOnly then
+        s.detail='Checking out the matched WAV in Wwise...';coroutine.yield()
+        w:checkout(link,profile)
+        local checked=fs:inspect({link.original},true)[1]
+        assert(checked and checked.ok and not checked.readOnly,'Wwise original is still read-only after checkout. Check source control in Wwise, then retry.')
+        assert(checked.sha==original.sha and checked.resolvedPath==original.resolvedPath,'Original changed during checkout; render again.')
+        original=checked
+        w:verify(link,profile)
+      end
       link.destination_sha=original.sha;link.destination_path=original.resolvedPath
       local previous_hash=w:content_hash(link,profile.platform)
       s.detail='Replacing the existing WAV...';coroutine.yield()
@@ -218,6 +227,9 @@ local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
   if s.busy then process_one();return end
   connection_tick(time)
+  if s.startup_arm and w.connected and profile.project_id then
+    s.startup_arm=false;enable()
+  end
   if not s.enabled or not w.connected then return end
   current_project()
   local report=stats()
@@ -333,6 +345,7 @@ local function ui()
     I.BeginDisabled(ctx,s.busy or s.working or not win or not w.connected)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
+      s.startup_arm=false
       if enabled then schedule(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)

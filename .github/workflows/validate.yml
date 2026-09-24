@@ -22,6 +22,9 @@ jobs:
       - name: Windows PowerShell 5.1 file safety
         shell: powershell
         run: ./tests/test_windows.ps1
+      - name: Scoped source-control checkout
+        shell: powershell
+        run: ./tests/test_checkout.ps1
       - name: Deliverable matches sources
         shell: bash
         run: git diff --exit-code -- 'Wwise Relay.lua'

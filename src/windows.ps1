@@ -164,7 +164,7 @@ function Inspect([string]$p,[bool]$hash=$false) {
     $stream=[IO.File]::Open($full,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try {
       $info=WaveInfo $stream
-      $result=@{path=$p;resolvedPath=$full;ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
+      $result=@{path=$p;resolvedPath=$full;readOnly=(($f.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0);ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
       if ($hash) { $result.sha=HashStream $stream;$result.audioSha=AudioHash $stream }
       return $result
     } finally { $stream.Dispose() }
@@ -172,7 +172,7 @@ function Inspect([string]$p,[bool]$hash=$false) {
 }
 function Invoke-Request($req) {
   Assert-RequestAlive
-  if ($req.action -eq 'refresh') {
+  if ($req.action -in @('refresh','checkout')) {
     return Refresh-ExistingSource $req
   } elseif ($req.action -eq 'waapi') {
     return Invoke-Waapi $req
@@ -263,18 +263,19 @@ function Receive-Wamp($token) {
     return ,$message
   } finally { $stream.Dispose() }
 }
-function Invoke-Waapi($req,[switch]$ExistingSourceRefresh) {
+function Invoke-Waapi($req,[switch]$ExistingSourceRefresh,[switch]$ExistingSourceCheckout) {
   $allowed=@('ak.wwise.core.object.get','ak.wwise.core.getInfo','ak.wwise.core.getProjectInfo',
     'ak.wwise.core.audio.convert','ak.wwise.ui.commands.execute','ak.wwise.ui.bringToForeground')
   if ($ExistingSourceRefresh) { $allowed+='ak.wwise.core.audio.import' }
   if ($req.uri -notin $allowed) { throw 'Wwise operation is not permitted.' }
-  if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1') { throw 'Only navigation is permitted.' }
+  if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1' -and !($ExistingSourceCheckout -and $req.args.command -eq 'SourceControlCheckoutWAV' -and @($req.args.objects).Count -eq 1 -and [string]$req.args.objects[0] -match '^\{[0-9a-fA-F-]{36}\}$')) { throw 'Only navigation is permitted.' }
   if ($req.uri -eq 'ak.wwise.core.audio.convert' -and
       (@($req.args.objects).Count -ne 1 -or [string]$req.args.objects[0] -notmatch '^\{[0-9a-fA-F-]{36}\}$' -or
        @($req.args.platforms).Count -ne 1 -or @($req.args.languages).Count -ne 1 -or $req.args.languages[0] -ne 'SFX')) { throw 'Invalid conversion scope.' }
   $port=[int]$req.port
   if ($port -lt 1 -or $port -gt 65535) { throw 'Invalid WAAPI port.' }
   $ms=15000
+  if ($ExistingSourceCheckout) { $ms=60000 }
   if ($req.uri -eq 'ak.wwise.core.object.get' -and $req.args.waql) { $ms=60000 }
   if ($req.uri -in @('ak.wwise.core.audio.convert','ak.wwise.core.audio.import')) { $ms=120000 }
   $cancel=[Threading.CancellationTokenSource]::new($ms)
@@ -309,6 +310,7 @@ function Invoke-Waapi($req,[switch]$ExistingSourceRefresh) {
       $detail='This read request does not change audio.'
       if ($req.uri -eq 'ak.wwise.core.audio.convert') { $detail='The requested conversion may still finish in Wwise.' }
       elseif ($req.uri -eq 'ak.wwise.core.audio.import') { $detail='The existing-source refresh may still finish in Wwise.' }
+      elseif ($ExistingSourceCheckout) { $detail='Wwise checkout may still finish; no audio replacement has been requested.' }
       elseif ($req.uri -like 'ak.wwise.ui.*') { $detail='Wwise navigation did not respond.' }
       throw ($operation+' timed out after '+($ms/1000)+' seconds. '+$detail+' Updates are paused.')
     }
@@ -333,6 +335,19 @@ function Refresh-ExistingSource($req) {
   $read.args=@{waql=('from type AudioFileSource where originalWavFilePath = "'+$req.original+'"')};$read.options=@{return=@('id')}
   $owners=@((Invoke-Waapi $read).data.return)
   if ($owners.Count -ne 1 -or $owners[0].id -ne $req.sourceId) { throw 'Shared originals cannot be refreshed.' }
+  if ($req.action -eq 'checkout') {
+    # Native Wwise checkout for exactly the verified existing AudioFileSource.
+    # Never clear attributes, add files, or check out a parent work unit.
+    $before=Inspect $req.original $true
+    if (!$before.ok) { throw $before.error }
+    if (!$before.readOnly) { return @{ok=$true} }
+    $call=@{port=$req.port;uri='ak.wwise.ui.commands.execute';args=@{command='SourceControlCheckoutWAV';objects=@($req.sourceId)};options=@{};operation='Check out matched original WAV'}
+    $null=Invoke-Waapi $call -ExistingSourceCheckout
+    $after=Inspect $req.original $true
+    if (!$after.ok -or $after.readOnly) { throw 'Wwise could not check out the matched WAV. Check the source-control connection or file lock in Wwise, then retry.' }
+    if ($after.sha -ne $before.sha -or $after.resolvedPath -ne $before.resolvedPath) { throw 'Original changed during checkout; render again.' }
+    return @{ok=$true}
+  }
   # Only this existing source GUID and its own existing file are supplied. No
   # Sound paths, object types, new filenames, properties or creation options.
   $relative=([string]$req.original).Substring($prefix.Length)

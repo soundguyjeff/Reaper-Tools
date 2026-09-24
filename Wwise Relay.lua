@@ -1,12 +1,12 @@
 -- @description Wwise Relay - update existing Wwise audio after REAPER/NVK renders
--- @version 0.3.3
+-- @version 0.3.4
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaImGui 0.9.3+, Windows Script Host and PowerShell 5.1.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
 -- Only existing sources are refreshed; no new objects, audio files or WAV backups.
 
 package.preload['relay.core'] = function()
-local M = { VERSION = '0.3.3', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.3.4', SECTION = 'WwiseRelay' }
 
 -- Optional frame budget installed by the panel; tests and non-UI use need no hook.
 function M.checkpoint() if M.yield_hook then M.yield_hook() end end
@@ -353,6 +353,12 @@ function M:content_hash(link,platform)
   assert(C.guid(source.content_hash),'Wwise returned no source content identity')
   return source.content_hash
 end
+function M:checkout(link,profile)
+  self:verify(link,profile)
+  self.backend:run({action='checkout',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
+    sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
+    operation='Check out matched original WAV'})
+end
 function M:refresh(link,profile,previous_hash,audio_changed)
   self:verify(link,profile)
   self.backend:run({action='refresh',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
@@ -516,7 +522,7 @@ function M:run(request)
   assert(coroutine.isyieldable(),'Background waits must run outside the UI callback')
   local operation=request.operation or request.uri or request.action
   self:trace(operation..' — started')
-  local timeout=(request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
+  local timeout=(request.action=='checkout' or request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
   if request.uri=='ak.wwise.core.object.get' and request.args and request.args.waql then timeout=75 end
   if request.action=='refresh' then timeout=210 end
   local job=self:begin_request(request,timeout)
@@ -726,7 +732,7 @@ function Inspect([string]$p,[bool]$hash=$false) {
     $stream=[IO.File]::Open($full,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try {
       $info=WaveInfo $stream
-      $result=@{path=$p;resolvedPath=$full;ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
+      $result=@{path=$p;resolvedPath=$full;readOnly=(($f.Attributes -band [IO.FileAttributes]::ReadOnly) -ne 0);ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
       if ($hash) { $result.sha=HashStream $stream;$result.audioSha=AudioHash $stream }
       return $result
     } finally { $stream.Dispose() }
@@ -734,7 +740,7 @@ function Inspect([string]$p,[bool]$hash=$false) {
 }
 function Invoke-Request($req) {
   Assert-RequestAlive
-  if ($req.action -eq 'refresh') {
+  if ($req.action -in @('refresh','checkout')) {
     return Refresh-ExistingSource $req
   } elseif ($req.action -eq 'waapi') {
     return Invoke-Waapi $req
@@ -825,18 +831,19 @@ function Receive-Wamp($token) {
     return ,$message
   } finally { $stream.Dispose() }
 }
-function Invoke-Waapi($req,[switch]$ExistingSourceRefresh) {
+function Invoke-Waapi($req,[switch]$ExistingSourceRefresh,[switch]$ExistingSourceCheckout) {
   $allowed=@('ak.wwise.core.object.get','ak.wwise.core.getInfo','ak.wwise.core.getProjectInfo',
     'ak.wwise.core.audio.convert','ak.wwise.ui.commands.execute','ak.wwise.ui.bringToForeground')
   if ($ExistingSourceRefresh) { $allowed+='ak.wwise.core.audio.import' }
   if ($req.uri -notin $allowed) { throw 'Wwise operation is not permitted.' }
-  if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1') { throw 'Only navigation is permitted.' }
+  if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1' -and !($ExistingSourceCheckout -and $req.args.command -eq 'SourceControlCheckoutWAV' -and @($req.args.objects).Count -eq 1 -and [string]$req.args.objects[0] -match '^\{[0-9a-fA-F-]{36}\}$')) { throw 'Only navigation is permitted.' }
   if ($req.uri -eq 'ak.wwise.core.audio.convert' -and
       (@($req.args.objects).Count -ne 1 -or [string]$req.args.objects[0] -notmatch '^\{[0-9a-fA-F-]{36}\}$' -or
        @($req.args.platforms).Count -ne 1 -or @($req.args.languages).Count -ne 1 -or $req.args.languages[0] -ne 'SFX')) { throw 'Invalid conversion scope.' }
   $port=[int]$req.port
   if ($port -lt 1 -or $port -gt 65535) { throw 'Invalid WAAPI port.' }
   $ms=15000
+  if ($ExistingSourceCheckout) { $ms=60000 }
   if ($req.uri -eq 'ak.wwise.core.object.get' -and $req.args.waql) { $ms=60000 }
   if ($req.uri -in @('ak.wwise.core.audio.convert','ak.wwise.core.audio.import')) { $ms=120000 }
   $cancel=[Threading.CancellationTokenSource]::new($ms)
@@ -871,6 +878,7 @@ function Invoke-Waapi($req,[switch]$ExistingSourceRefresh) {
       $detail='This read request does not change audio.'
       if ($req.uri -eq 'ak.wwise.core.audio.convert') { $detail='The requested conversion may still finish in Wwise.' }
       elseif ($req.uri -eq 'ak.wwise.core.audio.import') { $detail='The existing-source refresh may still finish in Wwise.' }
+      elseif ($ExistingSourceCheckout) { $detail='Wwise checkout may still finish; no audio replacement has been requested.' }
       elseif ($req.uri -like 'ak.wwise.ui.*') { $detail='Wwise navigation did not respond.' }
       throw ($operation+' timed out after '+($ms/1000)+' seconds. '+$detail+' Updates are paused.')
     }
@@ -895,6 +903,19 @@ function Refresh-ExistingSource($req) {
   $read.args=@{waql=('from type AudioFileSource where originalWavFilePath = "'+$req.original+'"')};$read.options=@{return=@('id')}
   $owners=@((Invoke-Waapi $read).data.return)
   if ($owners.Count -ne 1 -or $owners[0].id -ne $req.sourceId) { throw 'Shared originals cannot be refreshed.' }
+  if ($req.action -eq 'checkout') {
+    # Native Wwise checkout for exactly the verified existing AudioFileSource.
+    # Never clear attributes, add files, or check out a parent work unit.
+    $before=Inspect $req.original $true
+    if (!$before.ok) { throw $before.error }
+    if (!$before.readOnly) { return @{ok=$true} }
+    $call=@{port=$req.port;uri='ak.wwise.ui.commands.execute';args=@{command='SourceControlCheckoutWAV';objects=@($req.sourceId)};options=@{};operation='Check out matched original WAV'}
+    $null=Invoke-Waapi $call -ExistingSourceCheckout
+    $after=Inspect $req.original $true
+    if (!$after.ok -or $after.readOnly) { throw 'Wwise could not check out the matched WAV. Check the source-control connection or file lock in Wwise, then retry.' }
+    if ($after.sha -ne $before.sha -or $after.resolvedPath -ne $before.resolvedPath) { throw 'Original changed during checkout; render again.' }
+    return @{ok=$true}
+  }
   # Only this existing source GUID and its own existing file are supplied. No
   # Sound paths, object types, new filenames, properties or creation options.
   $relative=([string]$req.original).Substring($prefix.Length)
@@ -979,7 +1000,7 @@ if saved~='' then
 end
 local fs=F.new(r,worker)
 local w=W.new(r,profile.port,fs)
-local s={enabled=false,status='Waiting for Wwise',detail='Relay connects automatically. Open Wwise with WAAPI enabled.',error=startup_error,
+local s={startup_arm=true,enabled=false,status='Waiting for Wwise',detail='Relay connects automatically. Open Wwise with WAAPI enabled.',error=startup_error,
   results={},containers={},details=false,detector=C.detector(),job=nil,next_probe=0,last_stats='',pending={},busy=false,
   tab='Setup',toast='',toast_until=0,selected_container=1,last_files={},
   auto_connect=true,next_connection=0,retry_delay=2,connection_status='Waiting for Wwise',connection_detail=''}
@@ -992,7 +1013,7 @@ local function save() r.SetExtState(C.SECTION,key,C.json(profile),true) end
 local function toast(text) s.toast=text;s.toast_until=r.time_precise()+6 end
 local function pause(message)
   fs:close_monitor()
-  s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
+  s.startup_arm=false;s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.busy=false;s.error=tostring(message);s.toast='';s.status='Updates paused';s.detail='Resolve the issue, then enable updates again.'
 end
 local function schedule(fn)
   if s.task then return end
@@ -1069,7 +1090,7 @@ local function pin()
     for _,p in ipairs(w.platforms) do if p.name=='Windows' then profile.platform=p.id end end
     if profile.platform=='' then profile.platform=w.platforms[1].id end
   end
-  save();toast('Project pinned. Enable updates and render as usual.')
+  save();toast('Project pinned. Relay is ready to follow renders.')
 end
 local function platform_name()
   for _,p in ipairs(w.platforms or {}) do if p.id==profile.platform then return p.name end end
@@ -1120,6 +1141,15 @@ local function process_one()
       local checks=fs:inspect({link.original},true)
       local original=checks[1]
       assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
+      if original.readOnly then
+        s.detail='Checking out the matched WAV in Wwise...';coroutine.yield()
+        w:checkout(link,profile)
+        local checked=fs:inspect({link.original},true)[1]
+        assert(checked and checked.ok and not checked.readOnly,'Wwise original is still read-only after checkout. Check source control in Wwise, then retry.')
+        assert(checked.sha==original.sha and checked.resolvedPath==original.resolvedPath,'Original changed during checkout; render again.')
+        original=checked
+        w:verify(link,profile)
+      end
       link.destination_sha=original.sha;link.destination_path=original.resolvedPath
       local previous_hash=w:content_hash(link,profile.platform)
       s.detail='Replacing the existing WAV...';coroutine.yield()
@@ -1162,6 +1192,9 @@ local function tick()
   local time=r.time_precise();r.SetExtState(C.SECTION,heartbeat_key,tostring(time),false)
   if s.busy then process_one();return end
   connection_tick(time)
+  if s.startup_arm and w.connected and profile.project_id then
+    s.startup_arm=false;enable()
+  end
   if not s.enabled or not w.connected then return end
   current_project()
   local report=stats()
@@ -1277,6 +1310,7 @@ local function ui()
     I.BeginDisabled(ctx,s.busy or s.working or not win or not w.connected)
     local changed,enabled=I.Checkbox(ctx,'Update after render',s.enabled)
     if changed then
+      s.startup_arm=false
       if enabled then schedule(enable) else fs:close_monitor();s.enabled=false;s.detector:cancel();s.pending={};s.job=nil;s.status='Updates paused';s.detail='Enable to follow future renders.' end
     end
     I.EndDisabled(ctx)

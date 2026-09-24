@@ -1,4 +1,4 @@
-# Wwise Relay v0.3.3: Windows check
+# Wwise Relay v0.3.4: Windows check
 
 No remote access or internet connection is required at runtime. These checks are manual; you do not need to run any developer commands.
 
@@ -36,3 +36,6 @@ If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versio
 Do not treat a successful panel notification as proof that the game played the new media: verify that once through the remote connection. Relay stops at the Wwise conversion boundary by design.
 
 17. **Linked project root:** Open a test Wwise project through a local directory junction such as `C:\Phobos`. Render to a separate folder. Confirm one matched existing source updates and converts, and unrelated originals remain unchanged. Also test a render folder reached through a directory junction.
+
+18. **Source-control checkout:** With Wwise source control connected, render an update to a matched read-only original. Confirm only that WAV checks out and updates. Check a locked/unavailable file fails without replacement.
+19. **Default enabled:** Restart Relay with a saved project. Confirm Update after render enables automatically without replaying the previous render; disconnect or manually pause and confirm it stays paused.

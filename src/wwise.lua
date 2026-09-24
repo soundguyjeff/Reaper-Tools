@@ -154,6 +154,12 @@ function M:content_hash(link,platform)
   assert(C.guid(source.content_hash),'Wwise returned no source content identity')
   return source.content_hash
 end
+function M:checkout(link,profile)
+  self:verify(link,profile)
+  self.backend:run({action='checkout',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,
+    sourceId=link.source_id,soundId=link.sound_id,original=link.original,platform=profile.platform,
+    operation='Check out matched original WAV'})
+end
 function M:refresh(link,profile,previous_hash,audio_changed)
   self:verify(link,profile)
   self.backend:run({action='refresh',port=self.port,projectId=profile.project_id,projectPath=profile.project_path,

@@ -123,7 +123,7 @@ function M:run(request)
   assert(coroutine.isyieldable(),'Background waits must run outside the UI callback')
   local operation=request.operation or request.uri or request.action
   self:trace(operation..' — started')
-  local timeout=(request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
+  local timeout=(request.action=='checkout' or request.action=='replace' or request.uri=='ak.wwise.core.audio.convert') and 130 or 35
   if request.uri=='ak.wwise.core.object.get' and request.args and request.args.waql then timeout=75 end
   if request.action=='refresh' then timeout=210 end
   local job=self:begin_request(request,timeout)

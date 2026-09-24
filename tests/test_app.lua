@@ -35,19 +35,21 @@ local function scenario(mode)
     local result={};for k,v in pairs(link) do result[k]=v end;result.render=path;return result
   end
   function w:verify() assert(mode~='identity_changed','Identity changed') end
+  local checkout_done=false
+  function w:checkout() assert(mode~='checkout_failure','Checkout failed');checkout_done=true end
   function w:content_hash() return id end
   function w:refresh() assert(mode~='refresh_failure','Source refresh failed');return id end
   function w:convert() converted=converted+1;if mode=='convert_stall' then for _=1,1000 do coroutine.yield() end end;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
   function w:show() shown=shown+1;return true end
   local fs={probes=0}
   function fs:close_monitor()closed=closed+1 end
-  function fs:inspect(paths) if mode=='file_stall' and paths[1]=='C:\\original.wav' then for _=1,1000 do coroutine.yield() end end;local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha=replaced>0 and 'new' or 'old'} end;return out end
+  function fs:inspect(paths) if mode=='file_stall' and paths[1]=='C:\\original.wav' then for _=1,1000 do coroutine.yield() end end;local out={};for _,p in ipairs(paths) do out[#out+1]={readOnly=(p=='C:\\original.wav' and (mode=='checkout_success' or mode=='checkout_failure' or mode=='checkout_still_readonly') and (not checkout_done or mode=='checkout_still_readonly')),ok=true,path=p,stamp='1:44',sha=replaced>0 and 'new' or 'old'} end;return out end
   function fs:begin_inspect(paths) return {paths=paths} end
   function fs:poll(job)
     self.probes=self.probes+1
     local out=self:inspect(job.paths)
     for _,v in ipairs(out) do
-      v.stamp=mode=='disconnect' and '1:44' or '2:44'
+      v.stamp=(mode=='disconnect' or mode=='late_start' or mode=='wrong_then_right') and '1:44' or '2:44'
       if mode=='inspection_failure' or (mode=='temporary_lock' and self.probes==1) then v.ok=false;v.error='WAV is locked or unreadable' end
     end
     return out
@@ -110,7 +112,7 @@ local function scenario(mode)
   end
   if mode=='disconnect' then
     assert(w.connected and attempts==1)
-    toggle=true;frames(4)
+    frames(4)
     for _,t in ipairs({2,3,5,7,11,19,35,40}) do now=t;frames(10) end
     assert(w.connected and attempts>1,'Did not reconnect after Wwise restarted')
     assert(replaced==0 and converted==0,'Reconnection replayed audio')
@@ -125,7 +127,7 @@ local function scenario(mode)
     exit_cb();total=total+1;return
   end
   if mode=='fresh_setup' then click='Use this project';frames(3) end
-  toggle=true;frames(3)
+  frames(3) -- Existing pinned projects arm automatically, without a checkbox click.
   if mode=='unknown' then report='FILE:C:\\unlinked.wav;' end
   if mode=='competing_outputs' then report='FILE:C:\\one\\render.wav;FILE:C:\\two\\render.wav;' end
   if mode=='new_filename' then report='FILE:C:\\new.wav;' end
@@ -140,7 +142,7 @@ local function scenario(mode)
     local count=replaced;frames(50);assert(replaced==count,'Stopped task resumed a replacement')
     exit_cb();total=total+1;return
   end
-  if mode=='success' or mode=='legacy_profile' or mode=='new_filename' or mode=='fresh_setup' or mode=='temporary_lock' then
+  if mode=='checkout_success' or mode=='success' or mode=='legacy_profile' or mode=='new_filename' or mode=='fresh_setup' or mode=='temporary_lock' then
     assert(replaced==1 and converted==1 and text:find('Wwise audio updated',1,true))
     click='Show in Wwise';frames(3);assert(shown==1,'Show must target successful container')
   elseif mode=='inspection_failure' then
@@ -157,5 +159,5 @@ local function scenario(mode)
   assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','refresh_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
+for _,mode in ipairs({'checkout_success','checkout_failure','checkout_still_readonly','never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','refresh_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
 return total
