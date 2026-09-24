@@ -4,7 +4,7 @@
     <reapack name="Wwise Relay.lua" type="script" desc="Wwise Relay - update existing Wwise audio after rendering">
       <metadata>
         <link rel="website" href="https://github.com/soundguyjeff/Reaper-Tools">Setup and instructions</link>
-        <description>{\rtf1\ansi Wwise Relay for Windows x64.\par Requires REAPER 7, ReaWwise, ReaImGui 0.9.3+ and Wwise 2024.1.1.\par Automatically matches WAV filenames to unique existing Sound names. No manual audio links, new objects or WAV backups.\par Test build: verify your NVK render groups before relying on batch coverage.}</description>
+        <description>{\rtf1\ansi Wwise Relay for Windows x64.\par Requires REAPER 7, ReaImGui 0.9.3+, Wwise 2024.1.1, Windows Script Host and PowerShell 5.1.\par Automatically matches WAV filenames to unique existing Sound names. No manual audio links, new objects or WAV backups.\par Test build: verify your NVK render groups before relying on batch coverage.}</description>
       </metadata>
       <version name="0.1.1" author="Reaper Tools" time="2026-09-24T11:21:05-05:00">
         <source main="main" platform="win64" hash="1220a42abaf1f5a724565a1e30893ab4f758ae75392e51801155d0c6475e7d264ffe">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/ac5ed9aba5c9ae60772432b16c8b9e59a6fea5ca/Wwise%20Relay.lua</source>
@@ -29,6 +29,10 @@
       <version name="0.2.4" author="Reaper Tools" time="2026-09-24T12:14:51-05:00">
         <source main="main" platform="win64" hash="1220fc2519c72b6226dec96fd1619e401b865bf3ccd13d82eb15bf85208a0a4e0f31">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/66b7201bdec682e29087b6ab99719feed6d573d8/Wwise%20Relay.lua</source>
         <changelog>Allow Windows Cloud Files markers in render/original paths while still rejecting actual symbolic links, junctions and unknown reparse tags. Report the exact unsupported path component.</changelog>
+      </version>
+      <version name="0.3.0" author="Reaper Tools" time="2026-09-24T12:27:57-05:00">
+        <source main="main" platform="win64" hash="12204ca25d144b3f4f199bef41c23c964c6a29989f68706edb9574d740c39de872ef">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/d7fd40554a7bdc8a460be6c8dd030ff6474cbb5f/Wwise%20Relay.lua</source>
+        <changelog>Move Wwise connection, WAAPI calls and all audio file operations into a background helper. Add timeouts, Stop waiting and cooperative panel processing. Remove synchronous ReaWwise dependency. Requires Windows Script Host and PowerShell 5.1.</changelog>
       </version>
     </reapack>
   </category>
