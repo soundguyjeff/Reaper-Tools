@@ -35,11 +35,13 @@ local function scenario(mode)
     local result={};for k,v in pairs(link) do result[k]=v end;result.render=path;return result
   end
   function w:verify() assert(mode~='identity_changed','Identity changed') end
+  function w:content_hash() return id end
+  function w:refresh() assert(mode~='refresh_failure','Source refresh failed');return id end
   function w:convert() converted=converted+1;if mode=='convert_stall' then for _=1,1000 do coroutine.yield() end end;assert(mode~='conversion_failure','Conversion failed');return 'C:\\cache.wem' end
   function w:show() shown=shown+1;return true end
   local fs={probes=0}
   function fs:close_monitor()closed=closed+1 end
-  function fs:inspect(paths) if mode=='file_stall' and paths[1]=='C:\\original.wav' then for _=1,1000 do coroutine.yield() end end;local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha='old'} end;return out end
+  function fs:inspect(paths) if mode=='file_stall' and paths[1]=='C:\\original.wav' then for _=1,1000 do coroutine.yield() end end;local out={};for _,p in ipairs(paths) do out[#out+1]={ok=true,path=p,stamp='1:44',sha=replaced>0 and 'new' or 'old'} end;return out end
   function fs:begin_inspect(paths) return {paths=paths} end
   function fs:poll(job)
     self.probes=self.probes+1
@@ -145,6 +147,8 @@ local function scenario(mode)
     assert(replaced==0 and converted==0 and text:find('WAV is locked or unreadable',1,true) and text:find('Updates paused',1,true))
   elseif mode=='mixed' then
     assert(replaced==1 and converted==1 and text:find('1 skipped',1,true) and not text:find('Wwise audio updated',1,true))
+  elseif mode=='refresh_failure' then
+    assert(replaced==1 and converted==0 and not text:find('Wwise audio updated',1,true))
   elseif mode=='conversion_failure' or mode=='stale_artifact' then
     assert(replaced==1 and converted==1 and not text:find('Wwise audio updated',1,true))
     assert(text:find('updates paused',1,true),'Failed conversion must pause')
@@ -153,5 +157,5 @@ local function scenario(mode)
   assert(not text:find('Save approved link',1,true))
   exit_cb();total=total+1
 end
-for _,mode in ipairs({'never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
+for _,mode in ipairs({'never_available','late_start','wrong_then_right','disconnect','mac_preview','connect_stall','convert_stall','file_stall','success','wrong_project','identity_changed','conversion_failure','refresh_failure','stale_artifact','unknown','project_switched','identity_reused','missing_master','invalid_identity','legacy_profile','new_filename','ambiguous','competing_outputs','mixed','fresh_setup','inspection_failure','temporary_lock'}) do scenario(mode) end
 return total

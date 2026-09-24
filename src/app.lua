@@ -177,17 +177,22 @@ local function process_one()
       local original=checks[1]
       assert(original and original.ok,original and original.error or 'Cannot read the matched original WAV')
       link.destination_sha=original.sha
-      local previous_sha=link.destination_sha
+      local previous_hash=w:content_hash(link,profile.platform)
       s.detail='Replacing the existing WAV...';coroutine.yield()
       local replaced=fs:replace(link,item)
-      row.replaced=true;row.state='Conversion failed';link.destination_sha=replaced.sha
+      row.replaced=true;row.state='Refresh failed';link.destination_sha=replaced.sha
       -- Verify identity again after replacement; never convert a new/moved object.
       w:verify(link,profile)
-      s.detail='Converting in Wwise...';coroutine.yield()
-      local converted=w:convert(link,profile.platform)
+      s.detail='Refreshing the existing Wwise source...';coroutine.yield()
+      local content_hash=w:refresh(link,profile,previous_hash,replaced.audioChanged)
+      w:verify(link,profile)
+      row.state='Conversion failed';s.detail='Converting in Wwise...';coroutine.yield()
+      local converted=w:convert(link,profile.platform,content_hash)
       s.detail='Checking converted media...';coroutine.yield()
-      fs:artifact(converted,replaced.stamp,previous_sha==replaced.sha)
-      row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media is current.'
+      fs:artifact(converted,content_hash)
+      local final=fs:inspect({link.original},true)[1]
+      assert(final and final.ok and final.sha==replaced.sha,'Original changed during conversion; updates paused')
+      row.state='Converted';row.message='Original bytes verified; Wwise reported no conversion messages; converted media matches the refreshed source.'
       local have=false;for _,v in ipairs(s.containers) do if v.id==link.container_id then have=true end end
       if not have then s.containers[#s.containers+1]={id=link.container_id,path=link.container_path} end
     end)
@@ -314,7 +319,7 @@ local function setup_tab()
   local ch,val=I.Checkbox(ctx,'Show success confirmation',profile.notify)
   if ch then profile.notify=val;save() end
   text('Automatic matching: WAV filename (without .wav) = existing Wwise Sound name. Duplicate or missing matches are skipped.')
-  text('Conversion uses existing Wwise settings. No object creation, imports, SoundBanks, or WAV backups.')
+  text('Conversion uses existing Wwise settings. Existing sources only. No new audio, SoundBanks, or WAV backups.')
   I.EndDisabled(ctx)
   if s.enabled then text('Pause updates to change setup.') end
   if s.connection_detail~='' then text(s.connection_detail) end

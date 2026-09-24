@@ -1,4 +1,4 @@
-# Wwise Relay: first Windows check
+# Wwise Relay v0.3.2: Windows check
 
 No remote access or internet connection is required at runtime. These checks are manual; you do not need to run any developer commands.
 
@@ -9,7 +9,7 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 3. **Enable:** Turn on Update after render. Old renders must not be sent immediately. No PowerShell or terminal window should appear during file checks. The inspector is reused, and stops when Relay is paused or closed.
 4. **Render:** Make an obvious audible change and render through your usual NVK action. Confirm Show file results lists the intended Wwise Sound path. After the render finishes, expect “1 replaced + converted” and “Wwise audio updated.” Check the result in Wwise, then through your existing remote game connection.
 5. **Locate:** Click Show in Wwise. The sound's immediate parent container should be selected. Repeat with outputs from two containers and check the container selector.
-6. **Repeat:** Render the same filename again, including a same-duration change. Confirm another update occurs. Also try an unchanged render: an already-current converted cache should be accepted.
+6. **Repeat:** Render the same filename again, including a same-duration change. Confirm another update occurs. Also try an unchanged render and then revert to an earlier version: a matching existing conversion should be accepted. A rapid repeat can take up to two additional seconds for a distinct file timestamp.
 7. **Batch:** Render several WAVs with matching sound names in one NVK operation, especially across different NVK render groups. Check **every expected filename and the count** in Show file results. REAPER exposes only its latest render report, so this check determines whether your NVK configuration reports the complete batch.
 8. **Cancel:** Cancel a render. No incomplete WAV should be sent. Check that any earlier completed groups are accurately reported and that canceled outputs were not replaced.
 9. **Unknown output:** Render a filename that has no matching Wwise Sound. Expect Skipped; no Wwise objects or originals should be created.
@@ -27,6 +27,9 @@ Start with one disposable existing SFX in a test project. Relay intentionally ke
 17. **Responsiveness:** Open Relay with Wwise closed or the port incorrect. REAPER should remain usable and Relay must show an error instead of hanging. While waiting, try Stop waiting. After Wwise becomes available and connects automatically, confirm REAPER stays usable during file checking and conversion. Stopping does not undo a WAV already replaced or cancel a conversion already sent to Wwise.
 
 18. **Automatic connection:** Start Relay before Wwise. It should display Waiting for Wwise and retry without clicks or popups. Open the saved Wwise project and wait for Connected. Confirm an unrelated project is not accepted. Stop waiting must pause retries; Resume auto-connect restarts them. Connecting/reconnecting alone must never replace audio.
+
+19. **Nested originals:** Try a Sound whose original WAV is inside a subfolder of Originals/SFX, including an AudioFileSource whose name differs from its WAV filename. Confirm the same source, original path and subfolder remain in use, with no extra files or objects.
+20. **Large project:** Start with a small render batch. Matching should send only targeted results to Relay, but Wwise's own query time depends on the project. If it reaches the one-minute lookup limit, Relay must report that lookup and pause without claiming a conversion happened.
 
 If a check fails, capture the exact message, REAPER/NVK/ReaWwise/ReaImGui versions, and whether it was a single render or multiple NVK groups. You can redact project names and paths; audio/project files are not needed to report a problem.
 

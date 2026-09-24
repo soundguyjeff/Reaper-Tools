@@ -13,6 +13,15 @@ function Wave([string]$p,[int]$seed=0,[int]$channels=1) {
     for($i=0;$i -lt 480*$channels;$i++) {$w.Write([int16](($i+$seed)%30000))}
   } finally {$w.Dispose();$f.Dispose()}
 }
+function Wem([string]$p) {
+  Wave $p 22
+  $bytes=[IO.File]::ReadAllBytes($p);$stream=[IO.MemoryStream]::new();$writer=[IO.BinaryWriter]::new($stream)
+  try {
+    $writer.Write($bytes);$writer.Write([Text.Encoding]::ASCII.GetBytes('hash'));$writer.Write([uint32]16)
+    $writer.Write(([guid]'{11111111-2222-3333-4444-555555555555}').ToByteArray())
+    $stream.Position=4;$writer.Write([uint32]($stream.Length-8));[IO.File]::WriteAllBytes($p,$stream.ToArray())
+  } finally {$writer.Dispose();$stream.Dispose()}
+}
 function Call($obj) {
   $request=Join-Path $root 'request.json'
   [IO.File]::WriteAllText($request,($obj | ConvertTo-Json -Depth 10),[Text.UTF8Encoding]::new($false))
@@ -27,7 +36,7 @@ try {
   Check ($a.ok -and $a.items.Count -eq 2 -and $a.items[0].ok) 'Valid PCM WAVs can be inspected'
   $request=@{action='replace';source=$src;destination=$dst;stamp=$a.items[0].stamp;destinationSha=$a.items[1].sha}
   $out=Call $request
-  Check ($out.ok -and (Sha $src) -eq (Sha $dst)) 'Exact bytes replace the existing original'
+  Check ($out.ok -and $out.audioChanged -and (Sha $src) -eq (Sha $dst)) 'Exact bytes replace the existing original'
   Check ((Sha $other) -eq $oldOther) 'Unrelated WAV remains unchanged'
   Check (@(Get-ChildItem $root -Filter '*.tmp').Count -eq 0) 'Successful staging leaves no temporary audio'
   Check (@(Get-ChildItem $root -Filter '*.bak').Count -eq 0) 'No WAV backup is created'
@@ -58,7 +67,34 @@ try {
   $out=Call $request
   Check (!$out.ok) 'Source equal to destination is rejected'
   $out=Call @{action='artifact';path=$dst}
-  Check ($out.ok -and $out.length -gt 0 -and $out.ticks) 'Converted-artifact metadata can be read'
+  Check (!$out.ok) 'An ordinary WAV without Wwise content identity is rejected'
+  $cache=Join-Path $root 'converted.wem';Wem $cache
+  $out=Call @{action='artifact';path=$cache}
+  Check ($out.ok -and $out.contentHash -eq '{11111111-2222-3333-4444-555555555555}') 'Converted WEM content identity is read from its hash chunk'
+  $same=Call @{action='inspect';paths=@($dst);hash=$true}
+  $out=Call @{action='replace';source=$dst;destination=$src;stamp=$same.items[0].stamp;destinationSha=(Sha $src)}
+  Check ($out.ok -and $out.audioChanged) 'Audio sample changes are distinguished from metadata'
+  $same=Call @{action='inspect';paths=@($dst);hash=$true}
+  $out=Call @{action='replace';source=$dst;destination=$src;stamp=$same.items[0].stamp;destinationSha=(Sha $src)}
+  Check ($out.ok -and !$out.audioChanged) 'Identical audio is detected on a repeated replacement'
+
+  $plain=Call @{action='inspect';paths=@($src);hash=$true}
+  $bytes=[IO.File]::ReadAllBytes($src);$stream=[IO.MemoryStream]::new();$writer=[IO.BinaryWriter]::new($stream)
+  try {
+    $writer.Write($bytes);$writer.Write([Text.Encoding]::ASCII.GetBytes('JUNK'));$writer.Write([uint32]4);$writer.Write([uint32]123)
+    $stream.Position=4;$writer.Write([uint32]($stream.Length-8));[IO.File]::WriteAllBytes($src,$stream.ToArray())
+  } finally {$writer.Dispose();$stream.Dispose()}
+  $metadata=Call @{action='inspect';paths=@($src);hash=$true}
+  Check ($metadata.items[0].sha -ne $plain.items[0].sha -and $metadata.items[0].audioSha -eq $plain.items[0].audioSha) 'Render metadata changes do not require a new audio-content hash'
+  $hidden=Join-Path $root '.cached.wem';Wem $hidden
+  [IO.File]::SetLastWriteTimeUtc($hidden,[datetime]::UtcNow.AddYears(-1))
+  if ($env:OS -eq 'Windows_NT') { [IO.File]::SetAttributes($hidden,[IO.FileAttributes]::Hidden) }
+  $out=Call @{action='artifact';path=$hidden}
+  Check ($out.ok -and $out.length -gt 0) 'A readable hidden converted cache is accepted regardless of age'
+  $locked=[IO.File]::Open($hidden,[IO.FileMode]::Open,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
+  try {$out=Call @{action='artifact';path=$hidden};Check (!$out.ok) 'Converted media held by a writer is rejected'} finally {$locked.Dispose()}
+  $out=Call @{action='artifact';path=(Join-Path $root 'missing.wem')}
+  Check (!$out.ok) 'Missing converted media is rejected'
   $unicode=Join-Path $root '火.wav';Wave $unicode 12;$a=Call @{action='inspect';paths=@($unicode)}
   Check ($a.items[0].ok) 'Unicode filenames work'
   # Test the production tag classifier without needing a Dropbox account/provider.

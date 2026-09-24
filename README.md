@@ -1,6 +1,6 @@
 # Reaper Tools
 
-## Wwise Relay — v0.3.1 Windows test build
+## Wwise Relay — v0.3.2 Windows test build
 
 A small REAPER panel that follows completed renders, automatically finds and replaces **existing Wwise SFX audio by sound name**, converts it using your chosen platform's existing settings, and shows a confirmation. **Show in Wwise** selects the sound's parent container.
 
@@ -8,7 +8,7 @@ A small REAPER panel that follows completed renders, automatically finds and rep
 
 **[Download the ZIP with instructions](Wwise-Relay.zip)** · **[Windows check guide](docs/WINDOWS-CHECKS.md)**
 
-This is a first test build. Automated logic, simulated workflows and synthetic file tests do not establish live REAPER/NVK/Wwise compatibility. The remaining checks happen on your Windows machine. No connection to that machine is needed.
+This repair was tested against real Wwise 2024.1.1 on Mac, including converted audio readback in a 20,000-Sound test project. Automated Windows tests cover the background helper and file handling. Native Windows REAPER/NVK rendering, your million-asset project and in-game playback still need your local check. No connection to that machine is needed. [Validation details](docs/LOCAL-VALIDATION.md).
 
 ### ReaPack
 
@@ -20,6 +20,16 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 
 [ReaPack installation and update guide](docs/REAPACK.md). The repository and downloads are public; no GitHub sign-in is needed.
 
+### v0.3.2 — targeted matching and verified conversion
+
+Relay asks Wwise for the exact Sound name and the owners of its particular original WAV. It no longer downloads the entire Sound/source catalog after each render. Matching queries have a one-minute limit while REAPER remains responsive. Wwise still evaluates those queries internally; million-asset performance has not been measured.
+
+After replacing the WAV, Relay refreshes **only the existing AudioFileSource**, using its GUID and its own existing original file/subfolder. It never supplies a new Sound path or object type. This constrained refresh uses Wwise's existing-source import mechanism; general imports and creation remain unavailable. It checks the project, active source and exclusive ownership again, and requires Wwise to return that same source and file.
+
+A rapid re-render may take up to two extra seconds to give the WAV a distinct timestamp. Changed sample data must produce a refreshed Wwise content identity before conversion. The converted WEM must contain that same identity, and the original must still contain the replacement bytes. This accepts valid older cached conversions when reverting to an earlier sound while rejecting stale audio. Metadata-only changes and identical renders are supported.
+
+Timeouts identify the operation that failed. Diagnostic files are `Data/WwiseRelay/last-operation.txt` and `last-error.txt`. Hidden originals and cache files are supported.
+
 ### v0.3.1 — automatic Wwise connection
 
 Open Relay and it connects in the background automatically. If Wwise is unavailable, the panel shows **Waiting for Wwise** and retries after 2, 4, 8, 16, then 30 seconds between attempts. It checks the connection while idle and verifies the saved project before accepting it. **Retry now** is available in Setup; changing the WAAPI port also starts a fresh attempt.
@@ -28,13 +38,13 @@ Connecting does not enable audio updates. First-time setup still needs **Use thi
 
 ### v0.3.0 — keep REAPER responsive
 
-Connecting to Wwise, all WAAPI requests, WAV inspection/hashing/replacement and conversion checks now run in a separate background PowerShell helper. Relay no longer calls ReaWwise's synchronous Lua connection/call functions. The panel resumes work in short steps, shows the current stage and has a **Stop waiting** button. Connection/read calls time out after 15 seconds; conversion gets up to two minutes. A helper that fails to start produces an error after 20 seconds without holding REAPER's interface.
+Connecting to Wwise, all WAAPI requests, WAV inspection/hashing/replacement and conversion checks now run in a separate background PowerShell helper. Relay no longer calls ReaWwise's synchronous Lua connection/call functions. The panel resumes work in short steps, shows the current stage and has a **Stop waiting** button. Connection/simple reads time out after 15 seconds; filtered project searches get one minute and conversion gets two minutes. A helper that fails to start produces an error after 20 seconds without holding REAPER's interface.
 
 Stopping or timing out does not undo a completed replacement or cancel a conversion already accepted by Wwise. Updates pause, and the message tells you to check Wwise before retrying. Pending replacement work checks the stop flag, request deadline and REAPER heartbeat before committing. The last helper operation is recorded locally in `Data/WwiseRelay/last-operation.txt` for diagnosis.
 
 **Windows Script Host (`wscript.exe`, JScript) and Windows PowerShell 5.1 must be available.** The GUI script host starts the helper hidden without waiting in REAPER. If either is blocked, Relay reports it; it does not change system policy. ReaWwise can remain installed for NVK and your other tools, but Relay no longer requires or uses its shared connection.
 
-Dropbox/Windows Cloud Files markers remain supported, while actual symbolic links, junctions and unknown tags remain blocked. Keep working audio available offline. Automated tests use a local WAMP test peer with deliberately stalled connections and synthetic files; live Wwise/NVK verification is still required.
+Dropbox/Windows Cloud Files markers remain supported, while actual symbolic links, junctions and unknown tags remain blocked. Keep working audio available offline. Automated tests use a local WAMP test peer with deliberately stalled connections and synthetic files. Real Wwise conversion was also tested locally; native Windows/NVK verification is still required.
 
 ### Automatic matching
 
@@ -65,17 +75,17 @@ Each render gets a fresh match. Renaming a render does not require setting up a 
 
 ### During work
 
-Turn on **Update after render**, then render through NVK as usual. Leave Relay running. After a completed output is stable, Relay finds and verifies its matching sound, replaces the original, requests conversion, and verifies the converted file. The compact panel starts at 440 × 300 and can be resized/docked using ReaImGui's normal window controls.
+Turn on **Update after render**, then render through NVK as usual. Leave Relay running. After a completed output is stable, Relay finds and verifies its matching sound, replaces the original, refreshes that existing source, requests conversion, and verifies the converted file. The compact panel starts at 440 × 300 and can be resized/docked using ReaImGui's normal window controls.
 
-**Wwise audio updated** means the replacement's bytes were verified, Wwise returned no conversion warnings/errors, and converted media passed a file check. **Show in Wwise** selects the updated parent container; if several were updated, choose one from the list. Your existing **Connect to Remote Platform** workflow remains in Wwise. Relay does not claim it has verified what played in the game.
+**Wwise audio updated** means the replacement's bytes were verified, the existing source was refreshed, Wwise returned no conversion warnings/errors, and the converted WEM's embedded content identity matches the refreshed source. **Show in Wwise** selects the updated parent container; if several were updated, choose one from the list. Your existing **Connect to Remote Platform** workflow remains in Wwise. Relay does not claim it has verified what played in the game.
 
 An unmatched or ambiguous render is skipped. A failure pauses further replacements and lists any files that were not processed. Fix the cause and use **Retry skipped / failed files**, or re-enable and render again. If conversion fails after replacement, the new original remains in place. There is no rollback: **no previous-WAV backup is created**, as requested.
 
 ### Scope and limits
 
-- No imports, object creation/deletion, project saves, SoundBank generation, conversion-setting changes or source-control checkout. The existing original and its converted cache are the intended changes.
+- No new audio, object creation/deletion, project saves, SoundBank generation, conversion-setting changes or source-control checkout. The only permitted import operation is a refresh of one existing source from its own existing original. The existing original and its converted cache are the intended changes.
 - Exact project identity, unique sound name, source ID, parent, active source, original path and destination content are checked. Wrong projects, shared originals, read-only files, missing files and channel-count changes are rejected. The current original is hashed immediately before each replacement; if it changes during staging, replacement is rejected. Earlier edits are not remembered as conflicts between renders.
-- Standard local RIFF WAV files only: PCM, float or extensible. No network paths, symbolic links/junctions, RF64/BW64, localized voice audio or semicolons in paths in this release. Render to a separate folder, not directly into Wwise Originals.
+- Standard local RIFF WAV files only: PCM, float or extensible. Converted media must be a RIFF WEM with a Wwise content-hash chunk. No network paths, symbolic links/junctions, RF64/BW64, localized voice audio or semicolons in paths in this release. Render to a separate folder, not directly into Wwise Originals.
 - Detection uses REAPER's latest completed `RENDER_STATS` report plus the listed files' timestamps/size. This is not a direct NVK callback. If NVK runs several native render groups before deferred scripts resume, only the final group's report may be visible. **Test your multi-group NVK workflow before relying on batch coverage.** Check the reported count against your outputs.
 - A manual edit to a WAV still named in the last render report can also look like a new render. Pause Relay while externally editing those files. Merely opening Relay or enabling it establishes a baseline and does not replay old renders.
 - Updates are sequential, not a batch transaction. Successful earlier files remain updated if a later one fails. Slow file operations and Wwise calls run outside REAPER; large responses are processed in short panel steps. Do not rename/reorganize the matched Wwise objects while a batch is updating.
@@ -84,6 +94,6 @@ Settings stay locally in REAPER's extension settings, keyed to the REAPER projec
 
 ### Development
 
-Edit `src/`, then run `python tools/build.py` to rebuild the root Lua deliverable. Run `python -m pip install lupa==2.8` and `python tests/run_tests.py` for Lua checks. On Windows, run `powershell -NoProfile -File tests/test_windows.ps1` for synthetic file checks. No tests connect to a game or production project.
+Edit `src/`, then run `python tools/build.py` to rebuild the root Lua deliverable. Run `python -m pip install lupa==2.8` and `python tests/run_tests.py` for Lua checks. On Windows, run `powershell -NoProfile -File tests/test_windows.ps1` for synthetic file checks. The optional `tests/test_live_wwise.py` additionally requires the isolated RelayTest fixture and an open Wwise 2024.1.1 instance. No tests connect to a game or production project.
 
 References: [REAPER ReaScript API](https://www.reaper.fm/sdk/reascript/reascripthelp.html), [Audiokinetic WAMP client](https://github.com/audiokinetic/waapi-client), [Microsoft Windows Script Host](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/wscript).

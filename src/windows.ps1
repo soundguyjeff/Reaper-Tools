@@ -92,28 +92,72 @@ function WaveInfo($s) {
     return @{channels=$channels;rate=$rate}
   } finally { $r.Dispose();$s.Position=0 }
 }
+function AudioHash($s) {
+  # Hash format and sample bytes, excluding render metadata such as BWF dates.
+  $s.Position=12;$reader=[IO.BinaryReader]::new($s,[Text.Encoding]::ASCII,$true)
+  $sha=[Security.Cryptography.SHA256]::Create();$buffer=New-Object byte[] 65536
+  try {
+    while ($s.Position+8 -le $s.Length) {
+      $id=[Text.Encoding]::ASCII.GetString($reader.ReadBytes(4));$length=$reader.ReadUInt32();$end=$s.Position+[long]$length
+      if ($end -gt $s.Length) { throw 'Incomplete WAV while hashing audio.' }
+      if ($id -in @('fmt ','data')) {
+        $remaining=[long]$length
+        while ($remaining -gt 0) {
+          $read=$s.Read($buffer,0,[int][Math]::Min($remaining,$buffer.Length))
+          if (!$read) { throw 'Incomplete audio while hashing.' }
+          $null=$sha.TransformBlock($buffer,0,$read,$buffer,0);$remaining-=$read
+        }
+      }
+      $s.Position=$end+($length % 2)
+    }
+    $null=$sha.TransformFinalBlock([byte[]]@(),0,0)
+    return ([BitConverter]::ToString($sha.Hash)).Replace('-','').ToLowerInvariant()
+  } finally { $sha.Dispose();$reader.Dispose();$s.Position=0 }
+}
+function MediaHash($s) {
+  $reader=[IO.BinaryReader]::new($s,[Text.Encoding]::ASCII,$true)
+  try {
+    if ($s.Length -lt 12 -or [Text.Encoding]::ASCII.GetString($reader.ReadBytes(4)) -ne 'RIFF') { throw 'Converted media is not a RIFF WEM.' }
+    $size=$reader.ReadUInt32()
+    if ($size+8 -ne $s.Length -or [Text.Encoding]::ASCII.GetString($reader.ReadBytes(4)) -ne 'WAVE') { throw 'Converted media is incomplete.' }
+    $hash='';$hasData=$false
+    while ($s.Position+8 -le $s.Length) {
+      $id=[Text.Encoding]::ASCII.GetString($reader.ReadBytes(4));$length=$reader.ReadUInt32();$end=$s.Position+[long]$length
+      if ($end -gt $s.Length) { throw 'Converted media contains an incomplete chunk.' }
+      if ($id -eq 'hash' -and $length -eq 16) { $hash=([guid]::new($reader.ReadBytes(16))).ToString('B') }
+      if ($id -eq 'data' -and $length -gt 0) { $hasData=$true }
+      $s.Position=$end+($length % 2)
+    }
+    if (!$hash -or !$hasData) { throw 'Converted media has no content identity or audio data.' }
+    return $hash
+  } finally { $reader.Dispose();$s.Position=0 }
+}
 function Inspect([string]$p,[bool]$hash=$false) {
   try {
-    $full=SafePath $p;$f=Get-Item -LiteralPath $full
+    $full=SafePath $p;$f=Get-Item -LiteralPath $full -Force
     $stream=[IO.File]::Open($full,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
     try {
       $info=WaveInfo $stream
       $result=@{path=$p;ok=$true;stamp=([string]$f.LastWriteTimeUtc.Ticks+':'+[string]$f.Length);length=$f.Length;channels=$info.channels;rate=$info.rate}
-      if ($hash) { $result.sha=HashStream $stream }
+      if ($hash) { $result.sha=HashStream $stream;$result.audioSha=AudioHash $stream }
       return $result
     } finally { $stream.Dispose() }
   } catch { return @{path=$p;ok=$false;error=$_.Exception.Message} }
 }
 function Invoke-Request($req) {
   Assert-RequestAlive
-  if ($req.action -eq 'waapi') {
+  if ($req.action -eq 'refresh') {
+    return Refresh-ExistingSource $req
+  } elseif ($req.action -eq 'waapi') {
     return Invoke-Waapi $req
   } elseif ($req.action -eq 'inspect') {
     $items=@(foreach ($p in $req.paths) { Inspect $p ([bool]$req.hash) })
     return @{ok=$true;items=$items}
   } elseif ($req.action -eq 'artifact') {
-    $p=SafePath $req.path;$f=Get-Item -LiteralPath $p
-    return @{ok=$true;length=$f.Length;ticks=[string]$f.LastWriteTimeUtc.Ticks}
+    $p=SafePath $req.path;$f=Get-Item -LiteralPath $p -Force
+    $stream=[IO.File]::Open($p,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+    try { return @{ok=$true;length=$stream.Length;ticks=[string]$f.LastWriteTimeUtc.Ticks;contentHash=(MediaHash $stream)} }
+    finally { $stream.Dispose() }
   } elseif ($req.action -eq 'replace') {
     $src=SafePath $req.source;$dst=SafePath $req.destination
     if ([StringComparer]::OrdinalIgnoreCase.Equals($src,$dst)) { throw 'Source and destination must differ.' }
@@ -122,14 +166,19 @@ function Invoke-Request($req) {
     try {
       # No writer may change the render while it is validated and copied.
       $renderStream=[IO.File]::Open($src,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
-      $si=Get-Item -LiteralPath $src
+      $si=Get-Item -LiteralPath $src -Force
       if (([string]$si.LastWriteTimeUtc.Ticks+':'+[string]$si.Length) -ne $req.stamp) { throw 'Render changed after it was queued.' }
       $wi=WaveInfo $renderStream;$sha=HashStream $renderStream
       $original=[IO.File]::Open($dst,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
-      $old=WaveInfo $original
+      $old=WaveInfo $original;$oldAudioSha=AudioHash $original;$newAudioSha=AudioHash $renderStream
       if ($old.channels -ne $wi.channels) { throw 'Channel count changed; update skipped.' }
       if ((HashStream $original) -ne $req.destinationSha) { throw 'Wwise original changed while preparing this update; render again after the other edit finishes.' }
       $original.Dispose();$original=$null
+      # Wwise may cache file identity at coarse timestamp resolution. Ensure a
+      # distinct write time even when the same audio is rendered twice rapidly.
+      $earliest=(Get-Item -LiteralPath $dst -Force).LastWriteTimeUtc.AddSeconds(2)
+      if (($earliest-[DateTime]::UtcNow).TotalSeconds -gt 5) { throw 'Original WAV timestamp is in the future; correct it before retrying.' }
+      while ([DateTime]::UtcNow -lt $earliest) { Assert-RequestAlive;Start-Sleep -Milliseconds 50 }
       $temp=Join-Path ([IO.Path]::GetDirectoryName($dst)) ('.wwise-relay-'+[guid]::NewGuid().ToString('N')+'.tmp')
       $out=[IO.File]::Open($temp,[IO.FileMode]::CreateNew,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)
       $renderStream.CopyTo($out);$out.Flush($true)
@@ -143,7 +192,7 @@ function Invoke-Request($req) {
       [IO.File]::Replace($temp,$dst,[System.Management.Automation.Language.NullString]::Value);$temp=$null
       $verify=Inspect $dst $true
       if (!$verify.ok -or $verify.sha -ne $sha) { throw 'Replacement occurred, but readback verification failed. Check the original WAV.' }
-      return @{ok=$true;sha=$sha;stamp=$verify.stamp;channels=$wi.channels;rate=$wi.rate}
+      return @{ok=$true;sha=$sha;stamp=$verify.stamp;channels=$wi.channels;rate=$wi.rate;audioChanged=($oldAudioSha -ne $newAudioSha)}
     } finally {
       if ($null -ne $renderStream) {$renderStream.Dispose()};if ($null -ne $original) {$original.Dispose()};if ($null -ne $out) {$out.Dispose()}
       if ($null -ne $temp -and [IO.File]::Exists($temp)) { [IO.File]::Delete($temp) }
@@ -180,9 +229,10 @@ function Receive-Wamp($token) {
     return ,$message
   } finally { $stream.Dispose() }
 }
-function Invoke-Waapi($req) {
+function Invoke-Waapi($req,[switch]$ExistingSourceRefresh) {
   $allowed=@('ak.wwise.core.object.get','ak.wwise.core.getInfo','ak.wwise.core.getProjectInfo',
     'ak.wwise.core.audio.convert','ak.wwise.ui.commands.execute','ak.wwise.ui.bringToForeground')
+  if ($ExistingSourceRefresh) { $allowed+='ak.wwise.core.audio.import' }
   if ($req.uri -notin $allowed) { throw 'Wwise operation is not permitted.' }
   if ($req.uri -eq 'ak.wwise.ui.commands.execute' -and $req.args.command -ne 'FindInProjectExplorerSyncGroup1') { throw 'Only navigation is permitted.' }
   if ($req.uri -eq 'ak.wwise.core.audio.convert' -and
@@ -190,7 +240,9 @@ function Invoke-Waapi($req) {
        @($req.args.platforms).Count -ne 1 -or @($req.args.languages).Count -ne 1 -or $req.args.languages[0] -ne 'SFX')) { throw 'Invalid conversion scope.' }
   $port=[int]$req.port
   if ($port -lt 1 -or $port -gt 65535) { throw 'Invalid WAAPI port.' }
-  $ms=15000;if ($req.uri -eq 'ak.wwise.core.audio.convert') { $ms=120000 }
+  $ms=15000
+  if ($req.uri -eq 'ak.wwise.core.object.get' -and $req.args.waql) { $ms=60000 }
+  if ($req.uri -in @('ak.wwise.core.audio.convert','ak.wwise.core.audio.import')) { $ms=120000 }
   $cancel=[Threading.CancellationTokenSource]::new($ms)
   try {
     if (!$script:socket -or $script:socket.State -ne [Net.WebSockets.WebSocketState]::Open -or $script:socketPort -ne $port) {
@@ -218,9 +270,47 @@ function Invoke-Waapi($req) {
     return @{ok=$true;data=$message[4]}
   } catch {
     if ($script:socket) { $script:socket.Abort();$script:socket.Dispose();$script:socket=$null }
-    if ($cancel.IsCancellationRequested) { throw 'Wwise response timed out. A requested conversion may still finish in Wwise; updates are paused.' }
+    if ($cancel.IsCancellationRequested) {
+      $operation=[string]$req.operation;if (!$operation) { $operation=[string]$req.uri }
+      $detail='This read request does not change audio.'
+      if ($req.uri -eq 'ak.wwise.core.audio.convert') { $detail='The requested conversion may still finish in Wwise.' }
+      elseif ($req.uri -eq 'ak.wwise.core.audio.import') { $detail='The existing-source refresh may still finish in Wwise.' }
+      elseif ($req.uri -like 'ak.wwise.ui.*') { $detail='Wwise navigation did not respond.' }
+      throw ($operation+' timed out after '+($ms/1000)+' seconds. '+$detail+' Updates are paused.')
+    }
     throw
   } finally { $cancel.Dispose() }
+}
+function Refresh-ExistingSource($req) {
+  $read=@{port=$req.port;uri='ak.wwise.core.object.get';operation='Verify existing source before refresh'}
+  $read.args=@{from=@{ofType=@('Project')}};$read.options=@{return=@('id','filePath')}
+  $project=@((Invoke-Waapi $read).data.return)
+  if ($project.Count -ne 1 -or $project[0].id -ne $req.projectId -or $project[0].filePath -ne $req.projectPath) { throw 'Wrong Wwise project before source refresh.' }
+  if ([string]$req.sourceId -notmatch '^\{[0-9a-fA-F-]{36}\}$') { throw 'Invalid source identity.' }
+  $read.args=@{from=@{id=@($req.sourceId)}};$read.options=@{return=@('id','type','parent','originalWavFilePath')}
+  $sources=@((Invoke-Waapi $read).data.return)
+  if ($sources.Count -ne 1 -or $sources[0].type -ne 'AudioFileSource' -or $sources[0].parent.id -ne $req.soundId -or $sources[0].originalWavFilePath -ne $req.original) { throw 'Existing source identity changed before refresh.' }
+  $read.args=@{from=@{id=@($req.soundId)}};$read.options=@{return=@('activeSource');platform=$req.platform}
+  $sounds=@((Invoke-Waapi $read).data.return)
+  if ($sounds.Count -ne 1 -or $sounds[0].activeSource.id -ne $req.sourceId) { throw 'Active audio source changed before refresh.' }
+  $info=Invoke-Waapi @{port=$req.port;uri='ak.wwise.core.getProjectInfo';args=@{};options=@{};operation='Verify SFX directory'}
+  $prefix=([string]$info.data.directories.originals).TrimEnd('\')+'\SFX\'
+  if (![string]$req.original -or !([string]$req.original).StartsWith($prefix,[StringComparison]::OrdinalIgnoreCase) -or [string]$req.original -match '["\x00-\x1f]') { throw 'Only existing SFX originals may be refreshed.' }
+  $read.args=@{waql=('from type AudioFileSource where originalWavFilePath = "'+$req.original+'"')};$read.options=@{return=@('id')}
+  $owners=@((Invoke-Waapi $read).data.return)
+  if ($owners.Count -ne 1 -or $owners[0].id -ne $req.sourceId) { throw 'Shared originals cannot be refreshed.' }
+  # Only this existing source GUID and its own existing file are supplied. No
+  # Sound paths, object types, new filenames, properties or creation options.
+  $relative=([string]$req.original).Substring($prefix.Length)
+  $separator=$relative.LastIndexOf('\');$subfolder=''
+  if ($separator -ge 0) { $subfolder=$relative.Substring(0,$separator) }
+  if ($relative.Split('\') -contains '..' -or $relative.Split('\') -contains '.') { throw 'Original path is not canonical.' }
+  $importArgs=@{importOperation='useExisting';default=@{importLanguage='SFX';importLocation=$req.sourceId;originalsSubFolder=$subfolder};imports=@(@{audioFile=$req.original;objectPath=''})}
+  $call=@{port=$req.port;uri='ak.wwise.core.audio.import';args=$importArgs;options=@{};operation='Refresh the existing Wwise source'}
+  $result=(Invoke-Waapi $call -ExistingSourceRefresh).data
+  if (@($result.log).Count -ne 0) { throw ('Source refresh: '+(($result.log | ForEach-Object {$_.message}) -join '; ')) }
+  if (@($result.objects).Count -ne 1 -or $result.objects[0].id -ne $req.sourceId -or @($result.files).Count -ne 1 -or $result.files[0] -ne $req.original) { throw 'Wwise did not confirm the exact existing source refresh.' }
+  return @{ok=$true}
 }
 function Service([string]$directory) {
   $script:serviceDir=[IO.Path]::GetFullPath($directory)

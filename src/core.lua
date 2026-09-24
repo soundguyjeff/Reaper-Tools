@@ -1,4 +1,4 @@
-local M = { VERSION = '0.3.1', SECTION = 'WwiseRelay' }
+local M = { VERSION = '0.3.2', SECTION = 'WwiseRelay' }
 
 -- Optional frame budget installed by the panel; tests and non-UI use need no hook.
 function M.checkpoint() if M.yield_hook then M.yield_hook() end end

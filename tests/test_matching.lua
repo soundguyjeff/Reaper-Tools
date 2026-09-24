@@ -15,10 +15,21 @@ local function fixture()
    if from.ofType then
      local kind=from.ofType[1]
      if kind=='Platform' then return {{id=profile.platform,name='Windows'}} end
-     if kind=='Sound' then return state.sounds end
-     if kind=='AudioFileSource' then return state.sources end
-   elseif from.id and from.id[1]==guid(4) then return {{id=guid(4),type='RandomSequenceContainer',path='\\Actor-Mixer Hierarchy\\Container'}} end
+     error('Whole-project audio enumeration is forbidden')
+   elseif from.id then
+     if from.id[1]==guid(4) then return {{id=guid(4),type='RandomSequenceContainer',path='\\Actor-Mixer Hierarchy\\Container'}} end
+     for _,v in ipairs(state.sources) do if v.id==from.id[1] then return {v} end end
+     return {}
+   end
    error('Unexpected object query')
+ end
+ function w:query(query,options,operation)
+   local kind,value=query:match('^from type (%w+) where [%w]+ = "(.*)"$');assert(kind and value,'Unexpected lookup: '..query)
+   local result={}
+   for _,v in ipairs(kind=='Sound' and state.sounds or state.sources) do
+     if (kind=='Sound' and v.name:lower()==value:lower()) or (kind=='AudioFileSource' and C.key(v.original)==C.key(value)) then result[#result+1]=v end
+   end
+   return result
  end
  function w:call(uri,args,options,read)
    assert(uri=='ak.wwise.core.object.get','Resolver attempted a non-read operation')
@@ -78,5 +89,24 @@ end)
 test('rendering directly into the matched original is rejected',function()
  local w,p,s,sound,source=fixture();source.original='D:\\Game\\Originals\\SFX\\Explosion_01.wav'
  local link,why=w:match(source.original,p,w:catalog(p));assert(not link and why:find('Render and original paths must differ',1,true))
+end)
+test('lookups send only an exact name and exact original path to Wwise',function()
+ local requests={}
+ local backend={run=function(_,request) requests[#requests+1]=request;return {data={['return']={}}} end}
+ local w=W.new({},8080,backend);w.originals='D:\\Game\\Originals'
+ w:matching_sounds('C:\\Renders\\Fire [close] $01.wav')
+ w:sources('D:\\Game\\Originals\\SFX\\old name.wav')
+ assert(requests[1].args.waql=='from type Sound where name = "Fire [close] $01"')
+ assert(requests[2].args.waql=='from type AudioFileSource where originalWavFilePath = "D:\\Game\\Originals\\SFX\\old name.wav"')
+ assert(not requests[1].args.from and not requests[2].args.from)
+ assert(#requests[1].options['return']==5 and #requests[2].options['return']==4)
+end)
+test('unsafe query characters are rejected before contacting Wwise',function()
+ local w=W.new({},8080,{run=function()error('Request must not reach the backend')end})
+ assert(not pcall(function()w:matching_sounds('C:\\Renders\\bad"name.wav')end))
+end)
+test('missing original paths are skipped before any ownership lookup',function()
+ local w,p,s,sound,source=fixture();source.original=''
+ local link,why=w:match(path,p,w:catalog(p));assert(not link and why:find('no local original',1,true))
 end)
 return total

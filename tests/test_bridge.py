@@ -59,6 +59,10 @@ def send(s,value,fragment=False):
     if fragment:
         half=len(b)//2;frame(s,b[:half],final=False);frame(s,b[half:],opcode=0)
     else:frame(s,b)
+PROJECT='{11111111-1111-1111-1111-111111111111}'
+SOURCE='{22222222-2222-2222-2222-222222222222}'
+SOUND='{33333333-3333-3333-3333-333333333333}'
+ORIGINAL=r'C:\Game\Originals\SFX\Nested\source.wav'
 class Peer:
     def __init__(self,mode):
         self.mode=mode;self.calls=[];self.errors=[];self.stop=threading.Event()
@@ -83,6 +87,27 @@ class Peer:
                             req=receive(s);assert req[0]==48 and req[4]==[];self.calls.append(req)
                             if self.mode=='call_stall':self.stop.wait(17);break
                             if self.mode=='error':send(s,[8,48,req[1],{},'ak.test.error',[],{'message':'Synthetic Wwise failure'}]);break
+                            if self.mode.startswith('refresh_'):
+                                uri=req[3];a=req[5];fields=req[2].get('return',[])
+                                if uri=='ak.wwise.core.getProjectInfo':reply={'directories':{'originals':r'C:\Game\Originals'}}
+                                elif uri=='ak.wwise.core.audio.import':
+                                    assert a=={'importOperation':'useExisting','default':{'importLanguage':'SFX','importLocation':SOURCE,'originalsSubFolder':'Nested'},'imports':[{'audioFile':ORIGINAL,'objectPath':''}]},a
+                                    reply={'files':[ORIGINAL],'objects':[{'id':SOURCE}],'log':[]}
+                                    if self.mode=='refresh_error':reply['log']=[{'severity':'Error','message':'Fixture refresh failed'}]
+                                    if self.mode=='refresh_wrong_result':reply['objects']=[{'id':SOUND}]
+                                elif a.get('from',{}).get('ofType')==['Project']:
+                                    reply={'return':[{'id':PROJECT,'filePath':r'C:\Game\game.wproj'}]}
+                                    if self.mode=='refresh_wrong_project':reply['return'][0]['id']=SOURCE
+                                elif a.get('waql'):
+                                    assert a['waql']=='from type AudioFileSource where originalWavFilePath = "'+ORIGINAL+'"'
+                                    reply={'return':[{'id':SOURCE}]}
+                                    if self.mode=='refresh_shared':reply['return'].append({'id':SOUND})
+                                elif fields==['activeSource']:reply={'return':[{'activeSource':{'id':SOURCE}}]}
+                                else:
+                                    reply={'return':[{'id':SOURCE,'type':'AudioFileSource','parent':{'id':SOUND},'originalWavFilePath':ORIGINAL}]}
+                                    if self.mode=='refresh_missing':reply['return']=[]
+                                    if self.mode=='refresh_changed_path':reply['return'][0]['originalWavFilePath']=r'C:\Elsewhere\other.wav'
+                                send(s,[50,req[1],{},[],reply],True);continue
                             send(s,[50,req[1],{},[],{'version':{'displayName':'2024.1.1 test'},'echo':req[5]}],True)
                     except (EOFError,ConnectionError):pass
         except (OSError,EOFError) as e:
@@ -128,7 +153,7 @@ with tempfile.TemporaryDirectory(prefix='bridge-',dir=ROOT/'work') as work:
         for mode in ('normal','error','handshake_stall','call_stall'):
             peer=Peer(mode);before_frames=frames;t=time.monotonic()
             try:
-                req=request({'action':'waapi','port':peer.port,'uri':'ak.wwise.core.getInfo','args':{'name':'test $ Unicode 火'},'options':{}})
+                req=request({'action':'waapi','port':peer.port,'uri':'ak.wwise.core.getInfo','args':{'name':'test $ Unicode 火'},'options':{},'operation':'Read Wwise version'})
                 try:
                     result=run(fs.run,fs,req)
                     assert mode=='normal';assert result['data']['echo']['name']=='test $ Unicode 火'
@@ -136,10 +161,32 @@ with tempfile.TemporaryDirectory(prefix='bridge-',dir=ROOT/'work') as work:
                 except Exception as e:
                     assert mode!='normal',str(e)
                     assert ('Synthetic Wwise failure' if mode=='error' else 'timed out') in str(e),str(e)
+                    if 'stall' in mode:
+                        assert 'Read Wwise version timed out' in str(e),str(e)
+                        assert 'This read request does not change audio' in str(e),str(e)
+                        assert 'conversion may' not in str(e),str(e)
+                        recorded=(Path(fs['dir'])/'last-error.txt').read_text()
+                        assert 'Read Wwise version' in recorded and 'timed out' in recorded
+                        assert 'Wwise Relay.lua:' not in str(e)
                 if 'stall' in mode:
                     assert frames-before_frames>100 and time.monotonic()-t<25
                     print('PASS '+mode+' times out while simulated REAPER frames continue')
                 else:print('PASS WAMP '+mode+' response, request fields and fragmented frames')
+            finally:peer.close()
+            assert not peer.errors,peer.errors
+        for mode in ('refresh_ok','refresh_wrong_project','refresh_missing','refresh_changed_path','refresh_shared','refresh_error','refresh_wrong_result'):
+            peer=Peer(mode)
+            try:
+                req=request({'action':'refresh','port':peer.port,'projectId':PROJECT,'projectPath':r'C:\Game\game.wproj',
+                    'sourceId':SOURCE,'soundId':SOUND,'original':ORIGINAL,'platform':PROJECT})
+                try:
+                    result=run(fs.run,fs,req);assert mode=='refresh_ok' and result['ok']
+                except Exception as e:
+                    assert mode!='refresh_ok',str(e)
+                    assert any(word in str(e) for word in ('Wrong Wwise','identity changed','Shared originals','Fixture refresh failed','exact existing')),str(e)
+                imports=[c for c in peer.calls if c[3]=='ak.wwise.core.audio.import']
+                assert len(imports)==(1 if mode in ('refresh_ok','refresh_error','refresh_wrong_result') else 0)
+                print('PASS '+mode+' uses only the exact existing source and nested original')
             finally:peer.close()
             assert not peer.errors,peer.errors
         # Forbidden operations are refused inside the worker, independently of Lua.

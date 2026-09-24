@@ -41,6 +41,7 @@ def main():
         release=ET.SubElement(package,'version',name=version,author='Reaper Tools',time=stamp)
         ET.SubElement(release,'source',main='main',platform='win64',hash=digest).text=url
         changes={
+            '0.3.2':'Use targeted name/original lookups for large projects. Refresh only the existing audio source, preserve its original subfolder, verify changed audio identity and the converted WEM hash. Accept valid cached prior versions. Improve timeout diagnostics and hidden-file handling. Tested with real Wwise 2024.1.1 on Mac; native Windows/NVK checks remain.',
             '0.1.1':'Fix launch error caused by GetProjectGUID; use built-in REAPER identity functions. First ReaPack release.',
             '0.3.1':'Automatically connect to Wwise on startup and retry quietly with bounded backoff. Verify the saved project, monitor connection health, and allow Retry now or Resume auto-connect. Reconnection never re-enables or replays audio updates.',
             '0.3.0':'Move Wwise connection, WAAPI calls and all audio file operations into a background helper. Add timeouts, Stop waiting and cooperative panel processing. Remove synchronous ReaWwise dependency. Requires Windows Script Host and PowerShell 5.1.',
