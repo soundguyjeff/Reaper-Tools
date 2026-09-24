@@ -42,6 +42,10 @@
         <source main="main" platform="win64" hash="12203b7bf454067764fe1250447ab8975fd135ec194556ae7cc529c73790c9e0703c">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/432b8b28b05ca0cccef771af9cbc508a5cd269ae/Wwise%20Relay.lua</source>
         <changelog>Use targeted name/original lookups for large projects. Refresh only the existing audio source, preserve its original subfolder, verify changed audio identity and the converted WEM hash. Accept valid cached prior versions. Improve timeout diagnostics and hidden-file handling. Tested with real Wwise 2024.1.1 on Mac; native Windows/NVK checks remain.</changelog>
       </version>
+      <version name="0.3.3" author="Reaper Tools" time="2026-09-24T15:43:58-05:00">
+        <source main="main" platform="win64" hash="1220a3318c15f22421bda89d6b3f8aab6f75c540214ceb28b05a8033a40e1afcadd5">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/52c26249f69299f343abb49bee236d968d898eda/Wwise%20Relay.lua</source>
+        <changelog>Support local directory junctions and symbolic links such as C:\Phobos. Resolve and pin real file locations, reject retargeted folders and same-file aliases, and retain existing-source and file-replacement checks.</changelog>
+      </version>
     </reapack>
   </category>
   <category name="Jeff">

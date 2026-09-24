@@ -1,10 +1,10 @@
-# Wwise Relay v0.3.3 local candidate
+# Wwise Relay v0.3.3 validation
 
 - 46 core Lua checks, 16 resolver checks, 6 conversion checks and 27 simulated panel workflows passed.
 - 30 PowerShell file checks passed on macOS. These do not execute Windows kernel calls.
 - Embedded Windows C# path resolver compiled successfully on macOS.
-- Added Windows-only regressions for resolving a real directory junction, replacing an existing WAV through it, same-file aliases, retargeted junctions and missing files. Not yet executed on Windows for this candidate.
-- No native Windows/NVK or live Wwise end-to-end validation is claimed for v0.3.3.
+- Added Windows-only regressions for resolving a real directory junction, replacing an existing WAV through it, same-file aliases, retargeted junctions and missing files. All passed on Windows PowerShell 5.1 in [run 36056849578](https://github.com/soundguyjeff/Reaper-Tools/actions/runs/36056849578); 37 file checks passed.
+- Windows asynchronous bridge checks passed: 3,248 simulated REAPER frames, worst observed step 15 ms. No real Windows/NVK or live Wwise end-to-end validation is claimed for v0.3.3.
 
 ## Previous release evidence
 

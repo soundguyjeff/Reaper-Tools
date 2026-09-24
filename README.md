@@ -26,7 +26,7 @@ https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/main/index.xml
 
 Directory junctions and directory symbolic links such as `C:\Phobos` now resolve to their real local file paths. Relay pins the resolved render and original locations, checks them again before replacement, and rejects two paths that resolve to the same WAV. Links on individual files and network targets remain unsupported. The existing-object, WAV validation, read-only, conflict and no-backup checks remain in place.
 
-This local build has passed Mac-hosted Lua and PowerShell checks; the new native Windows junction tests still need a Windows run. The published ReaPack feed remains at v0.3.2 until this build is published.
+Published through ReaPack after passing the [Windows validation run](https://github.com/soundguyjeff/Reaper-Tools/actions/runs/36056849578): all 37 Windows file checks, including real junction replacement and retarget rejection, plus Lua and asynchronous bridge tests. End-to-end testing with your Windows Wwise/NVK session remains.
 
 ### v0.3.2 — targeted matching and verified conversion
 
