@@ -14,6 +14,10 @@
         <source main="main" platform="win64" hash="12209a4d22dfc54064ac11977121ce0e0814cb68c3a7bc0b6833a52038b5dc1b9b3d">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/f91d42cb4d530b8246ef09343405d2e6a7bd90fc/Wwise%20Relay.lua</source>
         <changelog>Automatically match rendered WAV filenames to unique existing Wwise Sound names. Remove manual audio links. Skip missing, ambiguous, shared or competing targets. Keep project and platform preferences.</changelog>
       </version>
+      <version name="0.2.1" author="Reaper Tools" time="2026-09-24T11:56:45-05:00">
+        <source main="main" platform="win64" hash="1220790dfe41034c49f1331fac54c2939afe22b3b21828002cd785da4cdf79249425">https://raw.githubusercontent.com/soundguyjeff/Reaper-Tools/3ed451dbe4902de47561ad36c28f4d18f8478ed9/Wwise%20Relay.lua</source>
+        <changelog>Fix repeating PowerShell windows: reuse one read-only inspector created without a console. Surface failed WAV inspection details and pause instead of silently retrying forever.</changelog>
+      </version>
     </reapack>
   </category>
 </index>
