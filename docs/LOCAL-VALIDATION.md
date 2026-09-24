@@ -36,7 +36,7 @@ These measurements preceded the two additional edge-case Sounds. They are not la
 - 46 core safety checks, 16 matching checks, six conversion-freshness checks and 27 simulated panel workflows.
 - 29 synthetic file checks on Mac (32 on Windows, including junction checks): replacement byte equality, conflicts, locks, read-only files, missing destinations, malformed WAVs, channel changes, unchanged unrelated files, hidden cache files, WEM identity, metadata-only changes and Cloud Files tag classification. Windows additionally checks actual junctions.
 - Real background-worker tests with a local WAMP test peer: fragmented/error/stalled replies, exact existing-source refresh payload and subfolder, wrong project, missing/changed/shared sources, refresh errors, unexpected results, forbidden general imports, expired writes and stop/restart.
-- The GitHub Windows workflow runs the worker with Windows Script Host and Windows PowerShell 5.1. Release feed publication follows a successful candidate run.
+- The GitHub Windows workflow runs the worker with Windows Script Host and Windows PowerShell 5.1. The [v0.3.2 candidate run](https://github.com/soundguyjeff/Reaper-Tools/actions/runs/36053335518) passed: all 32 Windows file checks, all Lua checks and the real asynchronous bridge tests. The bridge advanced 3,566 simulated REAPER frames with a longest observed step of 16 ms. The release feed is published after this successful run.
 
 Reproduce the live check only against the prepared disposable fixture:
 

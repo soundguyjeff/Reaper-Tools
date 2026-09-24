@@ -3,7 +3,7 @@
 -- @author Reaper Tools
 -- @about Windows; Wwise 2024.1.1; requires ReaImGui 0.9.3+, Windows Script Host and PowerShell 5.1.
 -- Generated from src/. Single-file install: load this file in REAPER's Actions list.
--- No Wwise objects are created, no audio is imported, no WAV backups are made.
+-- Only existing sources are refreshed; no new objects, audio files or WAV backups.
 
 package.preload['relay.core'] = function()
 local M = { VERSION = '0.3.2', SECTION = 'WwiseRelay' }
